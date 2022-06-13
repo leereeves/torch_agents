@@ -3,6 +3,7 @@ import sys
 import torch
 
 import agents
+import dynamic
 import memory
 import networks
 import explore
@@ -14,13 +15,16 @@ def cartpole_demo():
     net = networks.FCNetwork([4, 512, 512, 2])
     mem = memory.PrioritizedReplayMemory(1e5)
     exp = explore.EpsilonGreedyStrategy(
-            random_explore_frames=1000,
-            initial_epsilon=1,
-            final_epsilon=0.1,
-            linear_epsilon_delta=1e-4,
-            eval_epsilon=0.01
-            )
-    agent = agents.dqn('CartPole', env, net, mem, exp, lr = 0.0001)
+        epsilon=dynamic.Sequence(
+            [
+            dynamic.Flat(1000, 1.0),
+            dynamic.Linear(1000, 1.0, 0.5),
+            dynamic.Sawtooth(10000, 10, 0.5, 0.1)
+            ],
+        ),
+        eval_epsilon=0.01
+    )
+    agent = agents.dqn('CartPole', env, net, mem, exp, lr = 0.0001, target_update_freq=1000)
     agent.train()
 
 # Demo of Double DQN with priority replay memory playing Breakout

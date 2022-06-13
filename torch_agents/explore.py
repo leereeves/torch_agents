@@ -14,38 +14,22 @@ class StrategyInterface(object):
         raise NotImplementedError
 
 class EpsilonGreedyStrategy(StrategyInterface):
-    def __init__(self, 
-            random_explore_actions,
-            initial_epsilon,
-            final_epsilon,
-            linear_epsilon_delta,
-            eval_epsilon,
-            ):
+    def __init__(self, epsilon, eval_epsilon):
         super().__init__()
-        self.epsilon = 1
-        self.next_epsilon = initial_epsilon
-
-        self.random_explore_remaining = random_explore_actions
-        self.final_epsilon = final_epsilon
-        self.delta = linear_epsilon_delta
-
+        self.prev_epsilon = None
+        self.epsilon = epsilon
         self.eval_epsilon = eval_epsilon
 
     def __str__(self):
-        return f"ε={self.epsilon:0.2f}"
+        return f"ε={self.prev_epsilon:0.2f}"
 
     def action_without_prediction(self, action_count, is_eval):
-        # a uniform random policy is run for this number of frames
-        if self.random_explore_remaining > 0:
-            self.random_explore_remaining -= 1
-            self.epsilon = 1
-        elif is_eval:
-            self.epsilon = self.eval_epsilon
+        if is_eval:
+            self.prev_epsilon = float(self.eval_epsilon)
         else:
-            self.epsilon = self.next_epsilon
-            self.next_epsilon = max(self.final_epsilon, self.epsilon - self.delta)
+            self.prev_epsilon = float(self.epsilon)
 
-        if random.random() < self.epsilon:
+        if random.random() < self.prev_epsilon:
             action = np.random.randint(action_count)
         else:
             action = None # indicates caller must call action_with_prediction
