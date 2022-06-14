@@ -218,7 +218,7 @@ class dqn(object):
         start = time.time()
         scores = []
 
-        for self.episode in range(self.max_episodes):
+        for self.episode in range(int(self.max_episodes)):
             # This is the start of an episode
             state = self.env.reset()
             score = 0

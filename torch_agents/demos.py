@@ -12,24 +12,29 @@ import schedule
 # Demo of Double DQN with priority replay memory playing CartPole
 def cartpole_demo():
     env = environments.GymEnv(name="CartPole-v1", render_mode="human", valid_actions=[0,1])
-    net = networks.FCNetwork([4, 512, 512, 2])
+    net = networks.FCNetwork([4, 32, 32, 2])
     mem = memory.PrioritizedReplayMemory(1e5)
     exp = explore.EpsilonGreedyStrategy(
         epsilon=schedule.Sequence([
             schedule.Flat(1000, 1.0),
-            schedule.Linear(1000, 1.0, 0.5),
+            schedule.Linear(6000, 1.0, 0.4),
             schedule.Sequence(
                 [
-                    schedule.Linear(1000, 0.5, 0.1),
-                    schedule.Linear(1000, 0.4, 0.1),
-                    schedule.Linear(1000, 0.3, 0.1),
-                    schedule.Linear(1000, 0.2, 0.1),
-                    schedule.Flat(6000, 0.1),
+                    schedule.Linear(3000, 0.4, 0.1),
                 ],
-                repeat=10
+                repeat=300
             )
         ]).asfloat(),
-        eval_epsilon=0.01
+        eval_epsilon=0.01,
+        min_repeat=1,
+        max_repeat=schedule.Sequence(
+            [
+                schedule.Flat(5000, 1),
+                schedule.Flat(5000, 2),
+                schedule.Flat(5000, 3)
+            ],
+            repeat=300
+        ).asfloat()
     )
     agent = agents.dqn('CartPole', env, net, mem, exp, lr = 0.0001, target_update_freq=5000, max_episodes=1e6)
     agent.train()
