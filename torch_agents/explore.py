@@ -27,10 +27,11 @@ class EpsilonGreedyStrategy(StrategyInterface):
         return f"ε={self.prev_epsilon:0.2f}"
 
     def action_without_prediction(self, action_count, is_eval):
+        # Always read epsilon, to advance dynamic hyperparameters
+        self.prev_epsilon = float(self.epsilon)
+        # Read eval epsilon only in eval epsiodes
         if is_eval:
             self.prev_epsilon = float(self.eval_epsilon)
-        else:
-            self.prev_epsilon = float(self.epsilon)
 
         # continue previous action sequence, if any
         if len(self.sequence) > 0:

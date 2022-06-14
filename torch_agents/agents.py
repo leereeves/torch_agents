@@ -1,23 +1,3 @@
-# Implementation of the Deep Q learning algorithm
-
-# Tips for debugging, AKA mistakes I made:
-
-# Normalize the input
-
-# Notice that 4 game frames are stacked into one bundle,
-# one action is chosen per bundle (that is, per 4 frames)
-# and one parameter update is done per _action_.
-# So there's one parameter update per 16 frames.
-# That target network frequency is confusing. It's:
-# once per 40k frames = 10k actions = 2.5k updates
-
-# The RMSProp optimizer used in the paper is different
-# from the RMSProp in PyTorch, but that's ok, Adam works.
-
-# Setting the Q target to zero when a life is lost seems 
-# to help, but I've yet to confirm this in every game.
-# OpenAI discourages this, but the original paper did this.
-
 import datetime
 import math
 import numpy as np
@@ -32,6 +12,36 @@ from torch.utils.tensorboard import SummaryWriter
 
 import memory
 
+################################################################################
+# Deep Q Networks
+
+## References
+
+# Brockman, Greg, et al. "Openai gym." arXiv preprint arXiv:1606.01540 (2016).
+# https://arxiv.org/pdf/1606.01540.pdf
+# https://github.com/openai/gym
+# https://www.gymlibrary.ml/
+
+# He, Kaiming, et al. "Delving deep into rectifiers: Surpassing human-level 
+# performance on imagenet classification." Proceedings of the IEEE 
+# international conference on computer vision. 2015.
+# https://openaccess.thecvf.com/content_iccv_2015/papers/He_Delving_Deep_into_ICCV_2015_paper.pdf
+
+# Mnih, Volodymyr, et al. "Human-level control through deep reinforcement 
+# learning." nature 518.7540 (2015): 529-533.
+# https://daiwk.github.io/assets/dqn.pdf
+
+# Schaul, Tom, et al. "Prioritized experience replay."  ICLR 2016 (2016).
+# https://arxiv.org/pdf/1511.05952.pdf
+
+# Van Hasselt, Hado, Arthur Guez, and David Silver. "Deep reinforcement 
+# learning with double q-learning." Proceedings of the AAAI conference 
+# on artificial intelligence. Vol. 30. No. 1. 2016.
+# https://ojs.aaai.org/index.php/AAAI/article/download/10295/10154
+
+# Zhang, Shangtong, and Richard S. Sutton. "A deeper look at experience 
+# replay." arXiv preprint arXiv:1712.01275 (2017).
+# https://arxiv.org/pdf/1712.01275.pdf
 
 class dqn(object):
     def __init__(self, name, env, net, mem, exp, 
@@ -72,6 +82,7 @@ class dqn(object):
         self.update_freq = update_freq
         self.replay_start_size = replay_start_size
         self.target_update_freq = target_update_freq
+        self.next_target_update = int(self.target_update_freq)
         self.max_episodes = max_episodes
 
         self.eval_episode_count = 10
@@ -81,9 +92,12 @@ class dqn(object):
 
         if opt is not None:
             self.optimizer = opt
+            self.learning_rate = lr
         else:
             assert(lr is not None)
-            self.optimizer = torch.optim.Adam(self.policy_network.parameters(), lr = lr)
+            # learning rate will be updated before each backprop
+            self.optimizer = torch.optim.Adam(self.policy_network.parameters(), lr = 0)
+            self.learning_rate = lr
 
         self.loss = torch.nn.SmoothL1Loss(reduction = 'none', beta = 1.0)
 
@@ -140,8 +154,10 @@ class dqn(object):
 
         # "target_update_freq is the frequency (measured in number of parameter updates) 
         # with which the target network is updated.
-        if (self.update_count % self.target_update_freq) == 0:
+        self.next_target_update -= 1
+        if self.next_target_update <= 0:
             self.target_network.load_state_dict(self.policy_network.state_dict())
+            self.next_target_update = int(self.target_update_freq)
 
         indexes, batch, weights = self.memory.sample(self.batch_size)
         states, actions, new_states, rewards, dones = list(zip(*batch))
@@ -183,6 +199,11 @@ class dqn(object):
 
         # Normalize weights so they only scale the update downwards
         weights_batch = weights_batch / weights_batch.max()
+
+        # Update learning rate, which can be a dynamic parameter
+        if self.learning_rate is not None:
+            for g in self.optimizer.param_groups:
+                g['lr'] = float(self.learning_rate)
 
         # Train the network to predict the results of the Bellman equation        
         self.optimizer.zero_grad()
@@ -241,7 +262,7 @@ class dqn(object):
 
             tb_log.add_scalars(self.name, {'score': scores[-1]}, self.episode)
 
-            print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. {}. Avg p={:0.2f}. Avg q={:0.2f}".format(
+            print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. {}. Avg p={:0.2f}. Avg q={:0.2f}. LR={:g}".format(
                 datetime.timedelta(seconds=elapsed_time), 
                 self.episode, 
                 self.action_count, 
@@ -249,7 +270,9 @@ class dqn(object):
                 moving_average, 
                 str(self.strategy), 
                 self.memory.tree.get_average_weight(), 
-                np.average(self.qs)))
+                np.average(self.qs),
+                self.optimizer.param_groups[0]['lr']
+                ))
 
             if self.episode > 0 and self.episode % 10 == 0:
                 print("Saving model {}".format(self.get_model_filename()))
