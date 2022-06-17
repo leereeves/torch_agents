@@ -74,6 +74,34 @@ def breakout_demo():
     )
     agent.train()
 
+# Demo of DDPG with simple replay memory learning Pendulum
+def pendulum_demo():
+    env = environments.GymEnv(
+            name="Pendulum-v1", 
+            render_mode=None
+            )
+    state_size = env.env.observation_space.shape[0]
+    num_actions = env.env.action_space.shape[0]
+
+    actor_net = networks.ActorNetwork(state_size, num_actions)
+    critic_net = networks.CriticNetwork(state_size, num_actions)
+    mem = memory.ReplayMemory(1e6)
+    noise = explore.OrnsteinUhlenbeckProcess(
+            sigma=schedule.Linear(50000, 0.2, 0).asfloat(),
+            theta=0.15,
+            mu=0.0
+            )
+    agent = agents.ddpg('Pendulum', env, actor_net, critic_net, mem, noise, 
+            actor_lr = 0.001,
+            critic_lr = 0.001,
+            max_episodes=1000,
+            action_repeat=1,
+            update_freq=1,
+            replay_start_frames=200,
+            target_update_tau=0.001
+    )
+    agent.train()
+
 if __name__=="__main__":
     if len(sys.argv) < 2:
         print("Usage: python demos.py <demo name>")
@@ -86,4 +114,7 @@ if __name__=="__main__":
 
     if request == 'breakout':
         breakout_demo()
+
+    if request == 'pendulum':
+        pendulum_demo()
     

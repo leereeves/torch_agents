@@ -40,15 +40,20 @@ class GymEnv(TaskInterface):
         return self.env.reset()
 
     def step(self, action):
-        if isinstance(self.env.action_space, gym.spaces.Discrete):
-            a = action
-        else:
-            a = np.array([self.actions[action]])
+        # The list self.actions is a map from action_indexes to action numbers
+        # if the valid actions are discrete and aren't [0, ..., n]
+        if self.actions is not None:
+            action = self.actions[action]
+
+        # Some environments expect action as a Discrete, which is just a scalar
+        # others expect a Box(), which is an array of continuous values
+        # if not isinstance(self.env.action_space, gym.spaces.Discrete):
+        #     action = np.array([action])
 
         if self.render_mode == 'human':
             self.env.render()
 
-        return self.env.step(a) + (False, )
+        return self.env.step(action) + (False, )
         
     def render(self):
         raise NotImplementedError # use render_mode = 'human' instead
@@ -72,8 +77,8 @@ class GymAtariEnv(GymEnv):
     def render(self):
         return 
 
-    def step(self, action):
-        state, reward, done, info, life_lost = super().step(self.actions[action])
+    def step(self, action_index):
+        state, reward, done, info, life_lost = super().step(action_index)
         lives = info['lives']
         life_lost = (self.current_lives is not None and lives != self.current_lives)
         self.current_lives = lives

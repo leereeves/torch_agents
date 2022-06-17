@@ -50,3 +50,50 @@ class Mnih2015Atari(torch.nn.Module):
             elif isinstance(m, torch.nn.Linear):
                 torch.nn.init.kaiming_normal_(m.weight, nonlinearity='relu')
                 torch.nn.init.constant_(m.bias, 0.0)
+
+class ActorNetwork(torch.nn.Module):
+    def __init__(self, state_size, num_actions, hidden1=400, hidden2=300, init_w=3e-3):
+        super().__init__()
+        self.fc1 = torch.nn.Linear(state_size, hidden1)
+        self.fc2 = torch.nn.Linear(hidden1, hidden2)
+        self.fc3 = torch.nn.Linear(hidden2, num_actions)
+        self.relu = torch.nn.ReLU()
+        self.tanh = torch.nn.Tanh()
+        self.init_weights(init_w)
+    
+    def init_weights(self, init_w):
+        torch.nn.init.kaiming_normal_(self.fc1.weight, nonlinearity='relu')
+        torch.nn.init.kaiming_normal_(self.fc2.weight, nonlinearity='relu')
+        self.fc3.weight.data.uniform_(-init_w, init_w)
+    
+    def forward(self, x):
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        out = self.relu(out)
+        out = self.fc3(out)
+        out = self.tanh(out)
+        return out
+
+class CriticNetwork(torch.nn.Module):
+    def __init__(self, state_size, num_actions, hidden1=400, hidden2=300, init_w=3e-3):
+        super().__init__()
+        self.fc1 = torch.nn.Linear(state_size, hidden1)
+        self.fc2 = torch.nn.Linear(hidden1+num_actions, hidden2)
+        self.fc3 = torch.nn.Linear(hidden2, 1)
+        self.relu = torch.nn.ReLU()
+        self.init_weights(init_w)
+    
+    def init_weights(self, init_w):
+        torch.nn.init.kaiming_normal_(self.fc1.weight, nonlinearity='relu')
+        torch.nn.init.kaiming_normal_(self.fc2.weight, nonlinearity='relu')
+        self.fc3.weight.data.uniform_(-init_w, init_w)
+
+    def forward(self, x, a):
+        #x, a = xs
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(torch.cat([out,a],1))
+        out = self.relu(out)
+        out = self.fc3(out)
+        return out

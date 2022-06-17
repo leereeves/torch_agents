@@ -5,7 +5,7 @@ import torch
 
 class StrategyInterface(object):
     def __init__(self):
-        return
+        pass
 
     def action_without_prediction(self, action_count, episode, step):
         raise NotImplementedError
@@ -56,3 +56,24 @@ class EpsilonGreedyStrategy(StrategyInterface):
         action = torch.argmax(prediction).item()
         return action
 
+class OrnsteinUhlenbeckProcess(object):
+    def __init__(self, theta, mu=0., sigma=1., dt=1e-2, x0=None, size=1):
+        self.mu = mu
+        self.sigma = sigma
+        self.current_sigma = 0
+        self.theta = theta
+        self.dt = dt
+        self.x0 = x0
+        self.size = size
+        self.reset_states()
+
+    def __str__(self):
+        return f"σ={self.current_sigma:03f}"
+
+    def sample(self):
+        self.current_sigma = float(self.sigma)
+        self.prev_x = self.prev_x + self.theta * (self.mu - self.prev_x) * self.dt + self.current_sigma * np.sqrt(self.dt) * np.random.normal(size=self.size)
+        return self.prev_x
+
+    def reset_states(self):
+        self.prev_x = self.x0 if self.x0 is not None else np.zeros(self.size)
