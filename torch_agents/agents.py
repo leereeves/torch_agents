@@ -10,7 +10,7 @@ from copy import deepcopy
 from os.path import exists
 from torch.utils.tensorboard import SummaryWriter 
 
-import memory
+from . import memory
 
 ################################################################################
 # Deep Q Networks
@@ -52,7 +52,7 @@ class dqn(object):
                     gamma=0.99,
                     action_repeat=1,
                     update_freq=1,
-                    replay_start_size=1000,
+                    replay_start_frames=1000,
                     target_update_freq=2000,
                     max_episodes=1000,
                     checkpoint_filename=None,
@@ -80,7 +80,7 @@ class dqn(object):
         self.gamma = gamma
         self.action_repeat = action_repeat
         self.update_freq = update_freq
-        self.replay_start_size = replay_start_size
+        self.replay_start_frames = replay_start_frames
         self.target_update_freq = target_update_freq
         self.next_target_update = int(self.target_update_freq)
         self.max_episodes = max_episodes
@@ -136,9 +136,9 @@ class dqn(object):
         return action
 
     def minibatch_update(self):
-        # "a uniform random policy is run for replay_start_size frames before learning starts"
-        # That is replay_start_size / action_repeat actions (steps)
-        if self.action_count < (self.replay_start_size / self.action_repeat):
+        # "a uniform random policy is run for replay_start_frames frames before learning starts"
+        # That is replay_start_frames / action_repeat actions (steps)
+        if self.action_count < (self.replay_start_frames / self.action_repeat):
             return
 
         # "update_freq actions are selected by the agent between successive SGD updates"

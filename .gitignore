@@ -1,5 +1,11 @@
-/dist
-/torch_agents.egg-info
+tensorboard/
+
+# Distribution files
+dist/
+torch_agents.egg-info/
+
+# PyTorch network weights
+*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -4,8 +4,6 @@ import gym
 import numpy as np
 import random
 
-import networks
-
 class TaskInterface(object):
     def __init__(self, name):
         self.name = name

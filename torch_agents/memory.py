@@ -13,7 +13,7 @@
 import math
 import random
 
-import sumtree
+from . import sumtree
 
 class ReplayMemory(object):
     def __init__(self, capacity):

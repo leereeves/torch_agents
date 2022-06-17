@@ -2,23 +2,23 @@ import json
 import sys
 import torch
 
-import agents
-import memory
-import networks
-import explore
-import environments
-import schedule
+from torch_agents import agents
+from torch_agents import memory
+from torch_agents import networks
+from torch_agents import explore
+from torch_agents import environments
+from torch_agents import schedule
 
 # Demo of Double DQN with priority replay memory playing CartPole
 def cartpole_demo():
-    replay_start_size = 1000
+    replay_start_frames = 1000
 
     env = environments.GymEnv(name="CartPole-v1", render_mode="human", valid_actions=[0,1])
     net = networks.FCNetwork([4, 32, 32, 2])
     mem = memory.PrioritizedReplayMemory(1e6)
     exp = explore.EpsilonGreedyStrategy(
         epsilon=schedule.Sequence([
-            schedule.Flat(replay_start_size, 1.0),
+            schedule.Flat(replay_start_frames, 1.0),
             schedule.Linear(6000, 1.0, 0.4),
             schedule.Sequence(
                 [
@@ -43,7 +43,7 @@ def cartpole_demo():
     agent = agents.dqn('CartPole', env, net, mem, exp, 
         lr = lr_schedule.asfloat(), 
         target_update_freq=target_update_schedule.asfloat(), 
-        replay_start_size=replay_start_size,
+        replay_start_frames=replay_start_frames,
         max_episodes=1e6)
     agent.train()
 
@@ -58,16 +58,17 @@ def breakout_demo():
     net = networks.Mnih2015Atari(3)
     mem = memory.PrioritizedReplayMemory(1e6)
     exp = explore.EpsilonGreedyStrategy(
-            random_explore_actions=50000//4,
-            initial_epsilon=1,
-            final_epsilon=0.1,
-            linear_epsilon_delta=9e-7,
+            epsilon=schedule.Sequence([
+                schedule.Flat(50000 // 4, 1.0),
+                schedule.Linear(1e6, 1.0, 0.1),
+            ]).asfloat(),
             eval_epsilon=0.01
             )
     agent = agents.dqn('Breakout', env, net, mem, exp, lr = 0.00005,
             max_episodes=10000,
             action_repeat=4,
             update_freq=4,
+            replay_start_frames=50000,
             target_update_freq=10000,
             checkpoint_filename="breakout.pt"
     )
