@@ -78,7 +78,7 @@ def breakout_demo():
 def pendulum_demo():
     env = environments.GymEnv(
             name="Pendulum-v1", 
-            render_mode=None
+            render_mode="human"
             )
     state_size = env.env.observation_space.shape[0]
     num_actions = env.env.action_space.shape[0]

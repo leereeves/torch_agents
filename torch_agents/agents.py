@@ -394,19 +394,22 @@ class ddpg(object):
     def get_model_filename(self):
         return self.checkpoint_filename
 
-    def to_tensor(self, x):
-        return torch.tensor(np.asarray(x, dtype = np.float32)).to(self.device)
+    def to_tensor(self, x, dtype = np.float32):
+        return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
+
+    def to_tensors(self, *inputs, dtype = np.float32):
+        result = []
+        for x in inputs:
+            result.append(self.to_tensor(x))
+        return tuple(result)
 
     def choose_action(self, state):
         is_eval = (self.episode > 0) and ((self.episode % self.eval_episode_count) == 0)
 
         with torch.no_grad():
-            state_tensor = self.to_tensor(state)
-            if(len(state_tensor.shape) > 1):
-                state_tensor = state_tensor.squeeze(1) # remove weird input dimension
-            state_tensor = state_tensor.unsqueeze(0) # Add a batch dimension
+            state_tensor = self.to_tensor(state).flatten()
             a = self.policy_actor_network.forward(state_tensor)
-            a = a.squeeze(0).cpu().numpy() # remove batch dimension and untensor
+            a = a.cpu().numpy()
         
         if not is_eval:
             a += self.noise.sample()
@@ -449,52 +452,36 @@ class ddpg(object):
             for g in self.critic_opt.param_groups:
                 g['lr'] = float(self.critic_lr)
 
-        # Now update the critic network
-        indexes, batch, weights = self.memory.sample(self.batch_size)
+        # Update the critic network
+        _, batch, _ = self.memory.sample(self.batch_size)
         states, actions, new_states, rewards, dones = list(zip(*batch))
 
-        # Follow PyTorch's advice:
-        # "UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. 
-        # Please consider converting the list to a single numpy.ndarray with numpy.array() 
-        # before converting to a tensor."
-        states = np.asarray(states)
-        actions = np.asarray(actions)
-        new_states = np.asarray(new_states)
-        rewards = np.asarray(rewards)
-        dones = np.asarray(dones)
-        weights = np.asarray(weights)
+        # Create tensors
+        states, actions, new_states, rewards, dones = \
+            self.to_tensors(states, actions, new_states, rewards, dones)
 
-        # Now create tensors
-        states_batch = torch.tensor(states, dtype = torch.float32).to(self.device)
-        new_states_batch = torch.tensor(new_states,dtype = torch.float32).to(self.device)
-        actions_batch = torch.tensor(actions, dtype = torch.long).to(self.device)
-        rewards_batch = torch.tensor(rewards, dtype = torch.float32).to(self.device)
-        dones_batch = torch.tensor(dones, dtype = torch.float32).to(self.device)
-        weights_batch = torch.tensor(weights, dtype = torch.float32).to(self.device)
-
+        # Compute the Q target
         with torch.no_grad():
             next_q = self.target_critic_network(
-                new_states_batch,
-                self.target_actor_network(new_states_batch),
+                new_states,
+                self.target_actor_network(new_states),
             ).squeeze(1)
-            goal_q = rewards_batch + torch.mul(self.gamma * next_q, (1 - dones_batch))
+            target_q = rewards + torch.mul(self.gamma * next_q, (1 - dones))
 
-        # Critic update
+        # Train the critic network to predict the Q target
         self.policy_critic_network.zero_grad()
-        q = self.policy_critic_network(states_batch, actions_batch).squeeze(1)
-        q_loss = self.critic_loss_function(q, goal_q)
+        q = self.policy_critic_network(states, actions).squeeze(1)
+        q_loss = self.critic_loss_function(q, target_q)
         q_loss.backward()
         self.critic_opt.step()
         self.q_loss.append(q_loss.item())
 
-        # Actor update
+        # Train the actor network to predict the action with the best Q value
         self.policy_actor_network.zero_grad()
-        policy_loss = -self.policy_critic_network(states_batch, self.policy_actor_network(states_batch))
+        policy_loss = -self.policy_critic_network(states, self.policy_actor_network(states))
         policy_loss = policy_loss.mean()
         policy_loss.backward()
         self.actor_opt.step()
-
-        return
 
     def save_model(self):
         #filename = self.get_model_filename()
