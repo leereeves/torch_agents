@@ -21,3 +21,15 @@ https://user-images.githubusercontent.com/10812888/173040244-69920778-4644-4dec-
 
 ## Installation
 
+First, install PyTorch with the latest CUDA version for your platform from [pytorch.org](https://pytorch.org/get-started/locally/).
+
+Then install other required Python libraries with pip:
+
+```
+pip3 install tensorboard
+pip3 install gym[classic_control]
+pip3 install gym[atari]
+pip3 install gym[accept-rom-license]
+pip3 install gym[other]
+pip3 install gym[box2d]
+```

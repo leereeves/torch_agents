@@ -77,3 +77,18 @@ class OrnsteinUhlenbeckProcess(object):
 
     def reset_states(self):
         self.prev_x = self.x0 if self.x0 is not None else np.zeros(self.size)
+
+class GaussianNoise(object):
+    def __init__(self, mu=0.0, sigma=1.0, size=1):
+        self.mu = mu
+        self.sigma = sigma
+        self.current_sigma = 0
+        self.size = size
+
+    def __str__(self):
+        return f"σ={self.current_sigma:03f}"
+
+    def sample(self):
+        self.current_sigma = float(self.sigma)
+        return np.random.normal(size=self.size, loc=self.mu, scale=self.current_sigma)
+
