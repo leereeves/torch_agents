@@ -61,11 +61,13 @@ class Linear(Schedule):
     def __float__(self):
         self.protect_abstract()
         if not self.done:
-            self.value = self.next_value
-            self.next_value += self.slope
             self.steps_remaining -= 1
             if self.steps_remaining <= 0:
+                self.value=self.final_value
                 self.start_loop()
+            else:
+                self.value = self.next_value
+                self.next_value += self.slope
         return float(self.value)
 
 

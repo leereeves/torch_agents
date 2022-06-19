@@ -406,13 +406,18 @@ class ddpg(object):
     def choose_action(self, state):
         is_eval = (self.episode > 0) and ((self.episode % self.eval_episode_count) == 0)
 
+        # ask the actor network for the best action in this state
         with torch.no_grad():
             state_tensor = self.to_tensor(state).flatten()
             a = self.policy_actor_network.forward(state_tensor)
             a = a.cpu().numpy()
-        
+
+        # always sample the noise so dynamic parameters update on schedule
+        noise = self.noise.sample()
+
+        # but only use the noise during training, not eval
         if not is_eval:
-            a += self.noise.sample()
+            a += noise
 
         return a
 

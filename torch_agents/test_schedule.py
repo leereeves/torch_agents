@@ -20,6 +20,16 @@ def test_schedule():
     assert(dyn.done)
     assert(float(dyn) == 10)
 
+    # Test Linear final value with rounding error
+    dyn = schedule.Linear(4, 0.0, 1.0).asfloat()
+    assert(not dyn.done)
+    assert(float(dyn) == 0.0)
+    float(dyn) # about 0.333
+    float(dyn) # about 0.666
+    assert(float(dyn) == 1.0)
+    assert(dyn.done)
+    assert(float(dyn) == 1.0)
+
     # Test Linear with repeat
     dyn = schedule.Linear(11, 0.0, 10.0, repeat = 2).asfloat()
     for loop in range(2):

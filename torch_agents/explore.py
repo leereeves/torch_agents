@@ -90,5 +90,5 @@ class GaussianNoise(object):
 
     def sample(self):
         self.current_sigma = float(self.sigma)
-        return np.random.normal(size=self.size, loc=self.mu, scale=self.current_sigma)
+        return np.random.normal(size=self.size, loc=self.mu, scale=max(0.0,self.current_sigma))
 
