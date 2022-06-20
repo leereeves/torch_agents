@@ -131,6 +131,34 @@ def bipedalwalker_demo():
     )
     agent.train()
 
+# Demo of DDPG with simple replay memory learning Hopper
+def hopper_demo():
+    env = environments.GymEnv(
+            name="Hopper-v4", 
+            render_mode=None # "human"
+            )
+    state_size = env.env.observation_space.shape[0]
+    num_actions = env.env.action_space.shape[0]
+
+    actor_net = networks.ActorNetwork(state_size, num_actions)
+    critic_net = networks.CriticNetwork(state_size, num_actions)
+    mem = memory.ReplayMemory(1e6)
+    noise = explore.GaussianNoise(
+            mu=0.0,
+            sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
+            size=num_actions
+            )
+    agent = agents.ddpg('Hopper', env, actor_net, critic_net, mem, noise, 
+            actor_lr = 0.0001,
+            critic_lr = 0.001,
+            max_episodes=10000,
+            action_repeat=1,
+            update_freq=1,
+            replay_start_frames=2000,
+            target_update_tau=0.001
+    )
+    agent.train()
+
 
 if __name__=="__main__":
     if len(sys.argv) < 2:
@@ -151,3 +179,5 @@ if __name__=="__main__":
     if request == 'bipedalwalker':
         bipedalwalker_demo()
 
+    if request == 'hopper':
+        hopper_demo()
