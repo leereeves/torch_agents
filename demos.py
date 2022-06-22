@@ -14,7 +14,7 @@ def cartpole_demo():
     replay_start_frames = 1000
 
     env = environments.GymEnv(name="CartPole-v1", render_mode="human", valid_actions=[0,1])
-    net = networks.FCNetwork([4, 32, 32, 2])
+    net = networks.MLP([4, 32, 32, 2])
     mem = memory.PrioritizedReplayMemory(1e6)
     exp = explore.EpsilonGreedyStrategy(
         epsilon=schedule.Sequence([
@@ -74,109 +74,24 @@ def breakout_demo():
     )
     agent.train()
 
-# Demo of DDPG with simple replay memory learning Pendulum
-def pendulum_demo():
+# Demo of DDPG with simple replay memory
+def ddpg_demo(env_name, render_mode=None):
     env = environments.GymEnv(
-            name="Pendulum-v1", 
-            render_mode=None # "human"
+            name=env_name, 
+            render_mode=render_mode
             )
     state_size = env.env.observation_space.shape[0]
     num_actions = env.env.action_space.shape[0]
 
-    actor_net = networks.ActorNetwork(state_size, num_actions)
-    critic_net = networks.CriticNetwork(state_size, num_actions)
-    mem = memory.ReplayMemory(1e6)
-    noise = explore.OrnsteinUhlenbeckProcess(
-            sigma=schedule.Linear(50000, 0.2, 0).asfloat(),
-            theta=0.15,
-            mu=0.0,
-            size=num_actions
-            )
-    agent = agents.ddpg('Pendulum', env, actor_net, critic_net, mem, noise, 
-            actor_lr = 0.001,
-            critic_lr = 0.001,
-            max_episodes=1000,
-            action_repeat=1,
-            update_freq=1,
-            replay_start_frames=200,
-            target_update_tau=0.001
-    )
-    agent.train()
-
-# Demo of DDPG with simple replay memory learning Bipedal Walker
-def bipedalwalker_demo():
-    env = environments.GymEnv(
-            name="BipedalWalker-v3", 
-            render_mode=None # "human"
-            )
-    state_size = env.env.observation_space.shape[0]
-    num_actions = env.env.action_space.shape[0]
-
-    actor_net = networks.ActorNetwork(state_size, num_actions)
-    critic_net = networks.CriticNetwork(state_size, num_actions)
+    actor_net = networks.ContinuousActorNetwork(state_size, num_actions)
+    critic_net = networks.StateActionCriticNetwork(state_size, num_actions)
     mem = memory.ReplayMemory(1e6)
     noise = explore.GaussianNoise(
             mu=0.0,
             sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
             size=num_actions
             )
-    agent = agents.ddpg('BipedalWalker', env, actor_net, critic_net, mem, noise, 
-            actor_lr = 0.0001,
-            critic_lr = 0.001,
-            max_episodes=10000,
-            action_repeat=1,
-            update_freq=1,
-            replay_start_frames=2000,
-            target_update_tau=0.001
-    )
-    agent.train()
-
-# Demo of DDPG with simple replay memory learning Hopper
-def hopper_demo():
-    env = environments.GymEnv(
-            name="Hopper-v4", 
-            render_mode=None # "human"
-            )
-    state_size = env.env.observation_space.shape[0]
-    num_actions = env.env.action_space.shape[0]
-
-    actor_net = networks.ActorNetwork(state_size, num_actions)
-    critic_net = networks.CriticNetwork(state_size, num_actions)
-    mem = memory.ReplayMemory(1e6)
-    noise = explore.GaussianNoise(
-            mu=0.0,
-            sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
-            size=num_actions
-            )
-    agent = agents.ddpg('Hopper', env, actor_net, critic_net, mem, noise, 
-            actor_lr = 0.0001,
-            critic_lr = 0.001,
-            max_episodes=10000,
-            action_repeat=1,
-            update_freq=1,
-            replay_start_frames=2000,
-            target_update_tau=0.001
-    )
-    agent.train()
-
-# Demo of DDPG with simple replay memory learning Humanoid
-def humanoid_demo():
-    env = environments.GymEnv(
-            name="Humanoid-v4", 
-            render_mode=None # "human"
-            )
-    state_size = env.env.observation_space.shape[0]
-    num_actions = env.env.action_space.shape[0]
-
-    actor_net = networks.ActorNetwork(state_size, num_actions)
-    critic_net = networks.CriticNetwork(state_size, num_actions)
-    mem = memory.ReplayMemory(1e6)
-    noise = explore.GaussianNoise(
-            mu=0.0,
-            sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
-            size=num_actions
-            )
-    agent = agents.ddpg('Humanoid', env, actor_net, critic_net, mem, noise, 
+    agent = agents.ddpg(env_name, env, actor_net, critic_net, mem, noise, 
             actor_lr = 0.0001,
             critic_lr = 0.001,
             max_episodes=10000,
@@ -202,13 +117,13 @@ if __name__=="__main__":
         breakout_demo()
 
     if request == 'pendulum':
-        pendulum_demo()
+        ddpg_demo("Pendulum-v1")
 
     if request == 'bipedalwalker':
-        bipedalwalker_demo()
+        ddpg_demo("BipedalWalker-v3")
 
     if request == 'hopper':
-        hopper_demo()
+        ddpg_demo("Hopper-v4")
 
     if request == 'humanoid':
-        humanoid_demo()
+        ddpg_demo("Humanoid-v4")
