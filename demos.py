@@ -49,9 +49,9 @@ def cartpole_demo():
     agent.train()
 
 # Demo of Double DQN with priority replay memory playing Breakout
-def breakout_demo():
+def atari_demo(env_name):
     env = environments.GymAtariEnv(
-            name="BreakoutDeterministic-v4", 
+            name=env_name, 
             render_mode=None, 
             valid_actions=[1,2,3],
             action_repeat=4
@@ -65,13 +65,13 @@ def breakout_demo():
             ]).asfloat(),
             eval_epsilon=0.01
             )
-    agent = dqn('Breakout', env, net, mem, exp, lr = 0.00005,
+    agent = dqn(env_name, env, net, mem, exp, lr = 0.00005,
             max_episodes=10000,
             action_repeat=4,
             update_freq=4,
             replay_start_frames=50000,
             target_update_freq=10000,
-            checkpoint_filename="breakout.pt"
+            checkpoint_filename=None
     )
     agent.train()
 
@@ -115,7 +115,10 @@ if __name__=="__main__":
         cartpole_demo()
 
     if request == 'breakout':
-        breakout_demo()
+        atari_demo("BreakoutDeterministic-v4")
+
+    if request == 'pong':
+        atari_demo("ALE/Pong-v5")
 
     if request == 'pendulum':
         ddpg_demo("Pendulum-v1")
