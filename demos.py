@@ -2,7 +2,8 @@ import json
 import sys
 import torch
 
-from torch_agents import agents
+from torch_agents.agents.dqn import dqn
+from torch_agents.agents.ddpg import ddpg
 from torch_agents import memory
 from torch_agents import networks
 from torch_agents import explore
@@ -40,7 +41,7 @@ def cartpole_demo():
     )
     lr_schedule = schedule.Linear(1e6, 0.0001, 0.00001)
     target_update_schedule = schedule.Linear(10, 1000, 10000)
-    agent = agents.dqn('CartPole', env, net, mem, exp, 
+    agent = dqn('CartPole', env, net, mem, exp, 
         lr = lr_schedule.asfloat(), 
         target_update_freq=target_update_schedule.asfloat(), 
         replay_start_frames=replay_start_frames,
@@ -64,7 +65,7 @@ def breakout_demo():
             ]).asfloat(),
             eval_epsilon=0.01
             )
-    agent = agents.dqn('Breakout', env, net, mem, exp, lr = 0.00005,
+    agent = dqn('Breakout', env, net, mem, exp, lr = 0.00005,
             max_episodes=10000,
             action_repeat=4,
             update_freq=4,
@@ -91,7 +92,7 @@ def ddpg_demo(env_name, render_mode=None):
             sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
             size=num_actions
             )
-    agent = agents.ddpg(env_name, env, actor_net, critic_net, mem, noise, 
+    agent = ddpg(env_name, env, actor_net, critic_net, mem, noise, 
             actor_lr = 0.0001,
             critic_lr = 0.001,
             max_episodes=10000,
