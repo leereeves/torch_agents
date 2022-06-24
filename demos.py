@@ -4,6 +4,7 @@ import torch
 
 from torch_agents.agents.dqn import dqn
 from torch_agents.agents.ddpg import ddpg
+from torch_agents.agents.ppo import ppo
 from torch_agents import memory
 from torch_agents import networks
 from torch_agents import explore
@@ -11,7 +12,7 @@ from torch_agents import environments
 from torch_agents import schedule
 
 # Demo of Double DQN with priority replay memory playing CartPole
-def cartpole_demo():
+def dqn_cartpole_demo():
     replay_start_frames = 1000
 
     env = environments.GymEnv(name="CartPole-v1", render_mode="human", valid_actions=[0,1])
@@ -49,7 +50,7 @@ def cartpole_demo():
     agent.train()
 
 # Demo of Double DQN with priority replay memory playing Breakout
-def atari_demo(env_name):
+def dqn_atari_demo(env_name):
     env = environments.GymAtariEnv(
             name=env_name, 
             render_mode=None, 
@@ -103,6 +104,34 @@ def ddpg_demo(env_name, render_mode=None):
     )
     agent.train()
 
+# Demo of Proximal Policy Optimization
+def ppo_demo(env_name, render_mode=None):
+    env = environments.GymEnv(
+            name=env_name, 
+            render_mode=render_mode
+            )
+    state_size = env.env.observation_space.shape[0]
+    num_actions = env.env.action_space.shape[0]
+
+    actor_net = networks.ContinuousActorNetwork(state_size, num_actions)
+    critic_net = networks.StateActionCriticNetwork(state_size, num_actions)
+    mem = memory.ReplayMemory(1e6)
+    noise = explore.GaussianNoise(
+            mu=0.0,
+            sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
+            size=num_actions
+            )
+    agent = ppo(env_name, env, actor_net, critic_net, mem, noise, 
+            actor_lr = 0.0001,
+            critic_lr = 0.001,
+            max_episodes=10000,
+            action_repeat=1,
+            update_freq=1,
+            replay_start_frames=2000,
+            target_update_tau=0.001
+    )
+    agent.train()
+
 # Main entry point
 if __name__=="__main__":
     if len(sys.argv) < 2:
@@ -111,23 +140,26 @@ if __name__=="__main__":
 
     request = sys.argv[1].casefold()
 
-    if request == 'cartpole':
-        cartpole_demo()
+    if request == 'dqn-cartpole':
+        dqn_cartpole_demo()
 
-    if request == 'breakout':
-        atari_demo("BreakoutDeterministic-v4")
+    if request == 'dqn-breakout':
+        dqn_atari_demo("BreakoutDeterministic-v4")
 
-    if request == 'pong':
-        atari_demo("ALE/Pong-v5")
+    if request == 'dqn-pong':
+        dqn_atari_demo("ALE/Pong-v5")
 
-    if request == 'pendulum':
+    if request == 'ddpg-pendulum':
         ddpg_demo("Pendulum-v1")
 
-    if request == 'bipedalwalker':
+    if request == 'ddpg-bipedalwalker':
         ddpg_demo("BipedalWalker-v3")
 
-    if request == 'hopper':
+    if request == 'ddpg-hopper':
         ddpg_demo("Hopper-v4")
 
-    if request == 'humanoid':
+    if request == 'ddpg-humanoid':
         ddpg_demo("Humanoid-v4")
+
+    if request == 'ppo-pendulum':
+        ppo_demo("Pendulum-v1")
