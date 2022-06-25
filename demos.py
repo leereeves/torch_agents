@@ -121,10 +121,10 @@ def ppo_demo(env_name, render_mode=None):
             size=num_actions
             )
     agent = ppo(env_name, env, actor_net, critic_net, noise, 
-            max_epochs=200,
+            max_epochs=400,
             steps_per_epoch=1000,
-            actor_lr = schedule.Linear(200, 3e-4, 1e-4).asfloat(),
-            critic_lr = schedule.Linear(200, 1e-3, 3e-4).asfloat(),
+            actor_lr = schedule.Linear(400, 3e-4, 5e-5).asfloat(),
+            critic_lr = 5e-4,
             gamma = 0.99,
             lambd = 0.99,
     )

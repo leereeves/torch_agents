@@ -54,7 +54,7 @@ class ppo(Agent):
         self.critic = networks.SqueezeNet(critic_net).to(self.device)
 
         # Create online memory
-        self.memory = memory.OnlineAdvantageMemory(self.steps_per_epoch, self.gamma, self.lambd)
+        self.memory = memory.OnPolicyAdvantageMemory(self.steps_per_epoch, self.gamma, self.lambd)
 
         if isinstance(env.env.action_space, gym.spaces.Box):
             self.actor = networks.NormalDistFromMeanNet(actor_net, env.env.action_space.shape[0]).to(self.device)
@@ -142,17 +142,21 @@ class ppo(Agent):
             return ((self.critic(states) - returns)**2).mean()
 
         # Train actor
+        self.actor_loss = []
         for i in range(self.training_iterations_per_epoch):
             self.actor_opt.zero_grad()
             loss = compute_actor_loss()
             loss.backward()
+            self.actor_loss.append(loss.item())
             self.actor_opt.step()
 
         # Train critic
+        self.critic_loss = []
         for i in range(self.training_iterations_per_epoch):
             self.critic_opt.zero_grad()
             loss = compute_critic_loss()
             loss.backward()
+            self.critic_loss.append(loss.item())
             self.critic_opt.step()
 
     def save_model(self):
@@ -166,13 +170,15 @@ class ppo(Agent):
 
         self.tb_log.add_scalars(self.name, {'score': score}, self.episode)
 
-        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg q_loss={:g}. LR={:g}".format(
+        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:g} {:g}. LR={:g} {:g}".format(
             datetime.timedelta(seconds=elapsed_time), 
             self.episode, 
             self.action_count, 
             score, 
-            np.average(self.q_loss),
-            self.actor_opt.param_groups[0]['lr']
+            np.average(self.actor_loss),
+            np.average(self.critic_loss),
+            self.actor_opt.param_groups[0]['lr'],
+            self.critic_opt.param_groups[0]['lr']
             ))
 
         if self.episode > 0 and self.episode % 10 == 0:
@@ -190,10 +196,12 @@ class ppo(Agent):
         self.start_time = time.time()
         self.episode = 0
 
+        self.actor_loss = [0]
+        self.critic_loss = [0]
+
         for self.epoch in range(int(self.max_epochs)):
             state = self.env.reset()
             score = 0
-            self.q_loss = [0]
             for self.step_in_epoch in range(int(self.steps_per_epoch)):
                 with torch.no_grad():
                     state_tensor = self.to_tensor(state)

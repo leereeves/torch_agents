@@ -6,7 +6,7 @@ import scipy.signal
 from . import sumtree
 
 ###############################################################################
-# Two implementations of replay memory for offline algorithms
+# Two implementations of replay memory for off-policy algorithms
 #
 # class ReplayMemory is a simple flat array from which
 # past transistions are uniformly sampled.
@@ -95,10 +95,10 @@ class PrioritizedReplayMemory(object):
         return
 
 ###############################################################################
-# Memory for online algorithms that use 
+# Memory for on-policy algorithms that use 
 # generalized advantage estimation, like PPO
 
-class OnlineAdvantageMemory:
+class OnPolicyAdvantageMemory:
     def __init__(self, capacity, gamma=0.99, lambd=0.95):
         self.capacity = capacity
         self.states = [None] * capacity
