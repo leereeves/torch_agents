@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch.nn import Linear, ReLU
 
@@ -67,3 +68,47 @@ class StateActionCriticNetwork(torch.nn.Module):
 
     def forward(self, state, action):
         return self.mlp(torch.cat([state,action],1))
+
+
+class CategoricalDistFromLogitsNet(torch.nn.Module):
+    
+    def __init__(self, logits_net):
+        super().__init__()
+        self.logits_net = logits_net
+
+    def forward(self, state, action=None):
+        pi = torch.distributions.categorical.Categorical(logits=self.logits_net(state))
+        if action is None:
+            action = pi.sample()
+        logp = pi.log_prob(action)
+        return action, logp
+
+
+class NormalDistFromMeanNet(torch.nn.Module):
+
+    def __init__(self, mean_net, action_size):
+        super().__init__()
+        self.mean_net = mean_net
+        log_std = -0.5 * np.ones(action_size, dtype=np.float32)
+        self.log_std = torch.nn.Parameter(torch.as_tensor(log_std))
+
+    def forward(self, state, action=None):
+        mu = self.mean_net(state)
+        sigma = torch.exp(self.log_std)
+        pi = torch.distributions.normal.Normal(loc=mu, scale=sigma)
+        if action is None:
+            action = pi.sample()
+        # For multidimensional actions, sum the log probabilities
+        # because the probability of all actions is the product 
+        # of the probabilities of each individual action
+        logp = pi.log_prob(action).sum(axis=-1)
+        return action, logp
+
+class SqueezeNet(torch.nn.Module):
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, x):
+        return torch.squeeze(self.net(x), -1)
+

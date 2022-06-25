@@ -1,19 +1,19 @@
-# Two implementations of replay memory
+import math
+import numpy as np
+import random
+import scipy.signal
+
+from . import sumtree
+
+###############################################################################
+# Two implementations of replay memory for offline algorithms
 #
 # class ReplayMemory is a simple flat array from which
 # past transistions are uniformly sampled.
 #
 # class PrioritizedReplayMemory returns transitions with large
 # temporal-difference error (|target-prediction|)more frequently,
-# inspired by Schaul (2015) https://arxiv.org/abs/1511.05952v4
-# but using periodic systematic resets rather than randomization
-# to schedule review of past transitions whose target values
-# may have changed.
-
-import math
-import random
-
-from . import sumtree
+# See Schaul (2015) https://arxiv.org/abs/1511.05952v4
 
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -93,3 +93,94 @@ class PrioritizedReplayMemory(object):
     def update_weight(self, index, weight):
         self.tree.set_weight(index, weight)
         return
+
+###############################################################################
+# Memory for online algorithms that use 
+# generalized advantage estimation, like PPO
+
+class OnlineAdvantageMemory:
+    def __init__(self, capacity, gamma=0.99, lambd=0.95):
+        self.capacity = capacity
+        self.states = [None] * capacity
+        self.actions = [None] * capacity
+        self.new_states = [None] * capacity
+        self.rewards = np.zeros(capacity, dtype=np.float32)
+        self.dones = np.zeros(capacity, dtype=np.float32)
+        self.values  = np.zeros(capacity, dtype=np.float32)
+        self.logps   = np.zeros(capacity, dtype=np.float32)
+        self.advantages = np.zeros(capacity, dtype=np.float32)
+        self.returns = np.zeros(capacity, dtype=np.float32)
+        self.gamma = gamma
+        self.lambd = lambd
+        self.reset()
+
+    def reset(self):
+        # Reset to beginning
+        self.index = 0
+        self.episode_start_index = 0
+
+    def store_transition(self, state, action, new_state, reward, done, value, logp):
+        assert (self.index < self.capacity)
+        self.states[self.index] = state
+        self.actions[self.index] = action
+        self.new_states[self.index] = new_state
+        self.rewards[self.index] = reward
+        self.dones[self.index] = done
+        self.values[self.index] = value
+        self.logps[self.index] = logp
+        self.index += 1
+
+
+    def discounted_cumulative_sum(self, x, discount):
+        """
+        This trick for computing discounted cumulative sum using 
+        a scipy filter is discussed here:
+
+        "We'd like to calculate C[i] satisfying the recurrence C[i] = R[i] + discount * C[i+1]"
+        https://stackoverflow.com/questions/47970683/vectorize-a-numpy-discount-calculation
+
+        From [x_0, ..., x_n]
+        Calculate: 
+            [
+                x_0 + discount * x_1 + ... + discount^n * x_n,
+                x_1 + discount * x_2 + ... + discount^{n-1} * x_n,
+                ...
+                x_n
+            ]
+        """
+        r = x[::-1]
+        a = [1, -discount]
+        b = [1]
+        y = scipy.signal.lfilter(b, a, x=r, axis=0)
+        return y[::-1]
+
+    def end_episode(self, last_value):
+        # Slice out this episode
+        episode_slice = slice(self.episode_start_index, self.index)
+
+        # Mark start of next episode
+        self.episode_start_index = self.index
+
+        # Append value of last state (in case the episode terminated early)
+        rewards = np.append(self.rewards[episode_slice], last_value)
+        values = np.append(self.values[episode_slice], last_value)
+        
+        # Calculate returns
+        self.returns[episode_slice] = self.discounted_cumulative_sum(rewards, self.gamma)[:-1]
+
+        # Calculate advantages (GAE-Lambda), which are the difference 
+        # between the result of the Bellman equation and the estimated value
+        deltas = rewards[:-1] + self.gamma * values[1:] - values[:-1]
+        self.advantages[episode_slice] = self.discounted_cumulative_sum(deltas, self.gamma * self.lambd)
+        
+    def get(self):
+        assert (self.index == self.capacity)
+
+        # Normalize the advantage
+        adv_mean = np.mean(self.advantages)
+        adv_std = np.std(self.advantages)
+        self.advantages = (self.advantages - adv_mean) / adv_std
+
+        return self.states, self.actions, self.new_states, self.rewards, self.dones, \
+               self.returns, self.advantages, self.logps
+
