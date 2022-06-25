@@ -22,7 +22,7 @@ from .. import memory, networks
 
 
 class ppo(Agent):
-    def __init__(self, name, env, actor_net, critic_net, noise, 
+    def __init__(self, name, env, actor_net, critic_net,  
                     device=None, 
                     actor_opt=None,
                     critic_opt=None,
@@ -40,7 +40,6 @@ class ppo(Agent):
 
         self.name = name
         self.env = env
-        self.noise = noise
         
         self.gamma = gamma
         self.lambd = lambd

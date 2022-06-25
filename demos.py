@@ -115,16 +115,11 @@ def ppo_demo(env_name, render_mode=None):
 
     actor_net = networks.ContinuousActorNetwork(state_size, num_actions)
     critic_net = networks.MLP([state_size, 64, 64, 1])
-    noise = explore.GaussianNoise(
-            mu=0.0,
-            sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
-            size=num_actions
-            )
-    agent = ppo(env_name, env, actor_net, critic_net, noise, 
+    agent = ppo(env_name, env, actor_net, critic_net, 
             max_epochs=400,
             steps_per_epoch=1000,
-            actor_lr = schedule.Linear(400, 3e-4, 5e-5).asfloat(),
-            critic_lr = 5e-4,
+            actor_lr = schedule.Linear(400, 1e-4, 0).asfloat(),
+            critic_lr = 3e-4,
             gamma = 0.99,
             lambd = 0.99,
     )
