@@ -81,7 +81,8 @@ class CategoricalDistFromLogitsNet(torch.nn.Module):
         if action is None:
             action = pi.sample()
         logp = pi.log_prob(action)
-        return action, logp
+        entropy = pi.entropy()
+        return action, logp, entropy
 
 
 class NormalDistFromMeanNet(torch.nn.Module):
@@ -102,7 +103,8 @@ class NormalDistFromMeanNet(torch.nn.Module):
         # because the probability of all actions is the product 
         # of the probabilities of each individual action
         logp = pi.log_prob(action).sum(axis=-1)
-        return action, logp
+        entropy = pi.entropy()
+        return action, logp, entropy
 
 class SqueezeNet(torch.nn.Module):
     def __init__(self, net):

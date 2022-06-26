@@ -28,6 +28,7 @@ class ppo(Agent):
                     critic_opt=None,
                     actor_lr=None, 
                     critic_lr=None,
+                    beta=0.1,
                     gamma=0.99,
                     lambd=0.97,
                     epsilon=0.2, # how close to clip the policy gradient
@@ -41,6 +42,8 @@ class ppo(Agent):
         self.name = name
         self.env = env
         
+        self.beta = beta
+        self.current_beta = 0
         self.gamma = gamma
         self.lambd = lambd
         self.epsilon = epsilon
@@ -130,12 +133,15 @@ class ppo(Agent):
         states, actions, new_states, rewards, dones, \
             returns, advantages, old_logps = self.to_tensors(*self.memory.get())
 
+        # Save value of beta for this epoch
+        self.current_beta = float(self.beta)
         def compute_actor_loss():
-            _, logps = self.actor(states, actions)
+            _, logps, entropy = self.actor(states, actions)
             ratio = torch.exp(logps - old_logps)
             clipped = torch.clamp(ratio, 1-self.epsilon, 1+self.epsilon) * advantages
-            loss = -(torch.minimum(ratio * advantages, clipped)).mean()
-            return loss
+            adv_loss = -(torch.minimum(ratio * advantages, clipped)).mean()
+            ent_loss = -(self.current_beta * entropy).mean()
+            return adv_loss + ent_loss
 
         def compute_critic_loss():
             return ((self.critic(states) - returns)**2).mean()
@@ -169,7 +175,7 @@ class ppo(Agent):
 
         self.tb_log.add_scalars(self.name, {'score': score}, self.episode)
 
-        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:g} {:g}. LR={:g} {:g}".format(
+        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:g} {:g}. LR={:g} {:g} beta={:g}".format(
             datetime.timedelta(seconds=elapsed_time), 
             self.episode, 
             self.action_count, 
@@ -177,7 +183,8 @@ class ppo(Agent):
             np.average(self.actor_loss),
             np.average(self.critic_loss),
             self.actor_opt.param_groups[0]['lr'],
-            self.critic_opt.param_groups[0]['lr']
+            self.critic_opt.param_groups[0]['lr'],
+            self.current_beta
             ))
 
         if self.episode > 0 and self.episode % 10 == 0:
@@ -207,7 +214,7 @@ class ppo(Agent):
             for self.step_in_epoch in range(int(self.steps_per_epoch)):
                 with torch.no_grad():
                     state_tensor = self.to_tensor(state)
-                    action, logp = self.to_numpy(self.actor(state_tensor))
+                    action, logp, _ = self.to_numpy(self.actor(state_tensor))
                     value = self.to_numpy(self.critic(state_tensor))
                 new_state, reward, done, info, life_lost = self.env.step(action)
                 self.action_count += 1

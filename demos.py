@@ -121,6 +121,7 @@ def ppo_demo(env_name, render_mode=None):
             steps_per_epoch=1000,
             actor_lr = schedule.Linear(400, 1e-4, 0).asfloat(),
             critic_lr = 3e-4,
+            beta = schedule.Linear(100, 0.02, 0).asfloat(),
             gamma = 0.99,
             lambd = 0.99,
     )
