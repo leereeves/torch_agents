@@ -134,7 +134,7 @@ class ppo(Agent):
             _, logps = self.actor(states, actions)
             ratio = torch.exp(logps - old_logps)
             clipped = torch.clamp(ratio, 1-self.epsilon, 1+self.epsilon) * advantages
-            loss = -(torch.min(ratio * advantages, clipped)).mean()
+            loss = -(torch.minimum(ratio * advantages, clipped)).mean()
             return loss
 
         def compute_critic_loss():
