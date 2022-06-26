@@ -185,6 +185,7 @@ class ppo(Agent):
             self.save_model()
 
         self.episode += 1
+        self.scores.append(score)
 
     def train(self):
 
@@ -197,6 +198,8 @@ class ppo(Agent):
 
         self.actor_loss = [0]
         self.critic_loss = [0]
+
+        self.scores = []
 
         for self.epoch in range(int(self.max_epochs)):
             state = self.env.reset()
@@ -227,3 +230,5 @@ class ppo(Agent):
 
         self.env.close()
         self.tb_log.close()
+
+        return self.scores

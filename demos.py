@@ -1,4 +1,5 @@
 import json
+import numpy as np
 import sys
 import torch
 
@@ -125,6 +126,60 @@ def ppo_demo(env_name, render_mode=None):
     )
     agent.train()
 
+def grid_search(f, **grid):
+    keys = []
+    values = []
+    for k, v in grid.items():
+        keys.append(k)
+        values.append(v)
+    lengths = [len(v) for v in values]
+    divisors = [np.prod(lengths[0:x]) for x in range(0, len(lengths))]
+    grid_size = np.prod(lengths)
+
+    kwarg_history = []
+    score_history = []
+    for i in range(grid_size):
+        kwargs = {}        
+        for j, key in enumerate(keys):
+            grid_coordinate = int((i//divisors[j]) % lengths[j])
+            kwargs[keys[j]] = values[j][grid_coordinate]
+        print("============================")
+        print(kwargs)
+        print("============================")
+        scores = f(**kwargs)
+        kwarg_history.append(kwargs)
+        score_history.append(np.average(scores[-100:]))
+
+    for i in range(len(kwarg_history)):
+        print(kwarg_history[i])
+        print(score_history[i])
+
+
+
+# Demo of Proximal Policy Optimization
+def ppo_cartpole_demo(render_mode=None, epsilon=0.4, actor_lr=3e-4, critic_lr=1e-3, h=32):
+    env_name = "CartPole-v1"
+
+    env = environments.GymEnv(
+            name=env_name, 
+            render_mode=render_mode,
+            valid_actions=[0,1]
+            )
+    state_size = env.env.observation_space.shape[0]
+
+    actor_net = networks.MLP([state_size, h, h, 2])
+    critic_net = networks.MLP([state_size, h, h, 1])
+    agent = ppo(env_name, env, actor_net, critic_net, 
+            max_epochs=100,
+            steps_per_epoch=1000,
+            actor_lr = schedule.Linear(400, actor_lr, 0).asfloat(),
+            critic_lr = critic_lr,
+            gamma = 0.99,
+            lambd = 0.95,
+            epsilon=epsilon,
+    )
+    return agent.train()
+
 # Main entry point
 if __name__=="__main__":
     if len(sys.argv) < 2:
@@ -156,3 +211,14 @@ if __name__=="__main__":
 
     if request == 'ppo-pendulum':
         ppo_demo("Pendulum-v1")
+
+    if request == 'ppo-cartpole':
+        ppo_cartpole_demo("Pendulum-v1")
+
+    if request == 'ppo-cartpole-gs':
+        grid_search(ppo_cartpole_demo, 
+            epsilon=[0.2, 0.3, 0.4], 
+            h=[16,32,64],
+            #actor_lr=[1e-4, 2e-4, 3e-4],
+            #critic_lr=[1e-3, 3e-4]
+            )
