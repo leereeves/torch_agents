@@ -158,7 +158,7 @@ def grid_search(f, **grid):
 
 
 # Demo of Proximal Policy Optimization
-def ppo_cartpole_demo(render_mode=None, epsilon=0.4, actor_lr=3e-4, critic_lr=1e-3, h=32):
+def ppo_cartpole_demo(render_mode=None, actor_lr=3e-4, critic_lr=1e-4, h=64):
     env_name = "CartPole-v1"
 
     env = environments.GymEnv(
@@ -168,16 +168,20 @@ def ppo_cartpole_demo(render_mode=None, epsilon=0.4, actor_lr=3e-4, critic_lr=1e
             )
     state_size = env.env.observation_space.shape[0]
 
+    max_epochs=2000
     actor_net = networks.MLP([state_size, h, h, 2])
     critic_net = networks.MLP([state_size, h, h, 1])
     agent = ppo(env_name, env, actor_net, critic_net, 
-            max_epochs=100,
-            steps_per_epoch=1000,
-            actor_lr = schedule.Linear(400, actor_lr, 0).asfloat(),
-            critic_lr = critic_lr,
+            max_epochs=max_epochs,
+            steps_per_epoch=500,
+            training_iterations_per_epoch=50,
+            actor_lr = schedule.Linear(max_epochs, actor_lr, actor_lr/10).asfloat(),
+            critic_lr = schedule.Linear(10, 3e-3, critic_lr).asfloat(),
             gamma = 0.99,
-            lambd = 0.95,
-            epsilon=epsilon,
+            lambd = 0.8,
+            beta = schedule.Linear(max_epochs, 0.1, 0).asfloat(),
+            clip_neg = 0.01,
+            clip_pos = 0.05
     )
     return agent.train()
 

@@ -19,7 +19,8 @@ from .. import memory, networks
 # Proximal Policy Optimization (PPO)
 
 ## References
-
+# Schulman, John, et al. "Proximal policy optimization algorithms." 
+# arXiv preprint arXiv:1707.06347 (2017).
 
 class ppo(Agent):
     def __init__(self, name, env, actor_net, critic_net,  
@@ -32,8 +33,11 @@ class ppo(Agent):
                     gamma=0.99,
                     lambd=0.97,
                     epsilon=0.2, # how close to clip the policy gradient
+                    clip_neg=None,
+                    clip_pos=None,
                     max_epochs=50,
                     steps_per_epoch=1000,
+                    training_iterations_per_epoch=100,
                     checkpoint_filename=None,
                     ):
 
@@ -47,10 +51,12 @@ class ppo(Agent):
         self.gamma = gamma
         self.lambd = lambd
         self.epsilon = epsilon
+        self.clip_neg = clip_neg if clip_neg is not None else epsilon
+        self.clip_pos = clip_pos if clip_pos is not None else epsilon
 
         self.max_epochs = max_epochs
         self.steps_per_epoch = steps_per_epoch
-        self.training_iterations_per_epoch = 100
+        self.training_iterations_per_epoch = training_iterations_per_epoch
 
         # Create actor and critic
         self.critic = networks.SqueezeNet(critic_net).to(self.device)
@@ -137,8 +143,15 @@ class ppo(Agent):
         self.current_beta = float(self.beta)
         def compute_actor_loss():
             _, logps, entropy = self.actor(states, actions)
+            self.entropies.append(entropy.mean().item())
             ratio = torch.exp(logps - old_logps)
-            clipped = torch.clamp(ratio, 1-self.epsilon, 1+self.epsilon) * advantages
+            # For transitions with positive advantage,
+            # training will increase the ratio, but
+            # no further than 1+self.clip_pos
+            # For transitions with negative advantage,
+            # training will decrease the ratio, but
+            # no further than 1-self.clip_neg
+            clipped = torch.clamp(ratio, 1-self.clip_neg, 1+self.clip_pos) * advantages
             adv_loss = -(torch.minimum(ratio * advantages, clipped)).mean()
             ent_loss = -(self.current_beta * entropy).mean()
             return adv_loss + ent_loss
@@ -148,6 +161,7 @@ class ppo(Agent):
 
         # Train actor
         self.actor_loss = []
+        self.entropies = []
         for i in range(self.training_iterations_per_epoch):
             self.actor_opt.zero_grad()
             loss = compute_actor_loss()
@@ -175,7 +189,7 @@ class ppo(Agent):
 
         self.tb_log.add_scalars(self.name, {'score': score}, self.episode)
 
-        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:g} {:g}. LR={:g} {:g} beta={:g}".format(
+        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:.2e} {:.2e}. LR={:.2e} {:.2e} entropy={:.2g}".format(
             datetime.timedelta(seconds=elapsed_time), 
             self.episode, 
             self.action_count, 
@@ -184,7 +198,7 @@ class ppo(Agent):
             np.average(self.critic_loss),
             self.actor_opt.param_groups[0]['lr'],
             self.critic_opt.param_groups[0]['lr'],
-            self.current_beta
+            np.average(self.entropies)
             ))
 
         if self.episode > 0 and self.episode % 10 == 0:
@@ -205,6 +219,7 @@ class ppo(Agent):
 
         self.actor_loss = [0]
         self.critic_loss = [0]
+        self.entropies = [0]
 
         self.scores = []
 
