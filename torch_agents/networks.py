@@ -4,14 +4,14 @@ from torch.nn import Linear, ReLU
 
 # Fully connected network 
 class MLP(torch.nn.Module):
-    def __init__(self, layer_sizes):
+    def __init__(self, layer_sizes, activation=torch.nn.ReLU):
         super().__init__()
 
         layers = []
         for i in range(1, len(layer_sizes)):
             layers.append(torch.nn.Linear(layer_sizes[i-1], layer_sizes[i]))
             if i < len(layer_sizes) - 1:
-                layers.append(torch.nn.ReLU())
+                layers.append(activation())
 
         self.network = torch.nn.Sequential(*layers)
         
@@ -53,9 +53,9 @@ class Mnih2015Atari(torch.nn.Module):
                 torch.nn.init.constant_(m.bias, 0.0)
 
 class ContinuousActorNetwork(torch.nn.Module):
-    def __init__(self, state_size, num_actions, hidden1=400, hidden2=300, init_w=3e-3):
+    def __init__(self, state_size, num_actions, hidden1=400, hidden2=300, init_w=3e-3, activation=torch.nn.ReLU):
         super().__init__()
-        self.mlp = MLP([state_size, hidden1, hidden2, num_actions])
+        self.mlp = MLP([state_size, hidden1, hidden2, num_actions], activation=torch.nn.ReLU)
         self.tanh = torch.nn.Tanh()
     
     def forward(self, x):
@@ -100,8 +100,7 @@ class NormalDistFromMeanNet(torch.nn.Module):
         if action is None:
             action = pi.sample()
         # For multidimensional actions, sum the log probabilities
-        # because the probability of all actions is the product 
-        # of the probabilities of each individual action
+        # to compute the joint log probability
         logp = pi.log_prob(action).sum(axis=-1)
         entropy = pi.entropy()
         return action, logp, entropy

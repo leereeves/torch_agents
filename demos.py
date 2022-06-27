@@ -114,16 +114,21 @@ def ppo_demo(env_name, render_mode=None):
     state_size = env.env.observation_space.shape[0]
     num_actions = env.env.action_space.shape[0]
 
-    actor_net = networks.ContinuousActorNetwork(state_size, num_actions)
-    critic_net = networks.MLP([state_size, 64, 64, 1])
+    max_steps=1000000
+    steps_per_epoch=2000
+    max_epochs=max_steps//steps_per_epoch
+
+    actor_net = networks.ContinuousActorNetwork(state_size, num_actions, activation=torch.nn.Tanh)
+    critic_net = networks.MLP([state_size, 64, 64, 1], activation=torch.nn.Tanh)
     agent = ppo(env_name, env, actor_net, critic_net, 
-            max_epochs=400,
-            steps_per_epoch=1000,
-            actor_lr = schedule.Linear(400, 1e-4, 0).asfloat(),
-            critic_lr = 3e-4,
-            beta = schedule.Linear(100, 0.02, 0).asfloat(),
+            max_epochs=max_epochs,
+            steps_per_epoch=steps_per_epoch,
+            training_iterations_per_epoch=10,
+            actor_lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
+            critic_lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
+            beta = 0,
             gamma = 0.99,
-            lambd = 0.99,
+            lambd = 0.95,
     )
     agent.train()
 
@@ -158,7 +163,7 @@ def grid_search(f, **grid):
 
 
 # Demo of Proximal Policy Optimization
-def ppo_cartpole_demo(render_mode=None, actor_lr=3e-4, critic_lr=1e-4, h=64):
+def ppo_cartpole_demo(render_mode=None):
     env_name = "CartPole-v1"
 
     env = environments.GymEnv(
@@ -168,20 +173,22 @@ def ppo_cartpole_demo(render_mode=None, actor_lr=3e-4, critic_lr=1e-4, h=64):
             )
     state_size = env.env.observation_space.shape[0]
 
-    max_epochs=2000
-    actor_net = networks.MLP([state_size, h, h, 2])
-    critic_net = networks.MLP([state_size, h, h, 1])
+    max_steps=500000
+    steps_per_epoch=500
+    max_epochs=max_steps//steps_per_epoch
+
+    actor_net = networks.MLP([state_size, 64, 64, 2])
+    critic_net = networks.MLP([state_size, 64, 64, 1])
     agent = ppo(env_name, env, actor_net, critic_net, 
             max_epochs=max_epochs,
-            steps_per_epoch=500,
+            steps_per_epoch=steps_per_epoch,
             training_iterations_per_epoch=50,
-            actor_lr = schedule.Linear(max_epochs, actor_lr, actor_lr/10).asfloat(),
-            critic_lr = schedule.Linear(10, 3e-3, critic_lr).asfloat(),
+            actor_lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
+            critic_lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
             gamma = 0.99,
-            lambd = 0.8,
-            beta = schedule.Linear(max_epochs, 0.1, 0).asfloat(),
-            clip_neg = 0.01,
-            clip_pos = 0.05
+            lambd = 0.95,
+            beta = schedule.Linear(max_epochs, 0.01, 0).asfloat(),
+            epsilon = 0.2,
     )
     return agent.train()
 
@@ -216,6 +223,9 @@ if __name__=="__main__":
 
     if request == 'ppo-pendulum':
         ppo_demo("Pendulum-v1")
+
+    if request == 'ppo-humanoid':
+        ppo_demo("Humanoid-v4")
 
     if request == 'ppo-cartpole':
         ppo_cartpole_demo("Pendulum-v1")
