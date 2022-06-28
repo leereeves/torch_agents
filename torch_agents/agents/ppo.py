@@ -22,13 +22,21 @@ from .. import memory, networks
 # Schulman, John, et al. "Proximal policy optimization algorithms." 
 # arXiv preprint arXiv:1707.06347 (2017).
 
+class ppoAgent(torch.nn.Module):
+    def __init__(self, actor, critic):
+        super().__init__()
+        self.actor = actor
+        self.critic = critic
+
+    def forward(self, x):
+        raise NotImplementedError
+
 class ppo(Agent):
     def __init__(self, name, envs, actor_net, critic_net,
                     device=None, 
-                    actor_opt=None,
-                    critic_opt=None,
-                    actor_lr=None, 
-                    critic_lr=None,
+                    opt=None,
+                    lr=None,
+                    critic_coef=0.5,
                     beta=0.1,
                     gamma=0.99,
                     lambd=0.97,
@@ -57,6 +65,8 @@ class ppo(Agent):
         self.epsilon = epsilon
         self.clip_neg = clip_neg if clip_neg is not None else epsilon
         self.clip_pos = clip_pos if clip_pos is not None else epsilon
+        self.max_grad_norm = 0.5
+        self.critic_coef = critic_coef
 
         self.max_epochs = max_epochs
         self.steps_per_epoch = steps_per_epoch
@@ -74,26 +84,16 @@ class ppo(Agent):
         elif isinstance(action_space, gym.spaces.Discrete):
             self.actor = networks.CategoricalDistFromLogitsNet(actor_net).to(self.device)
 
-        if actor_opt is not None:
-            self.actor_opt = actor_opt
-            self.actor_lr = None
+        self.agent = ppoAgent(self.actor, self.critic)
+
+        if opt is not None:
+            self.opt = opt
+            self.lr = None
         else:
-            assert(actor_lr is not None)
+            assert(lr is not None)
             # learning rate will be updated before each backprop
-            self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr = 0)
-            self.actor_lr = actor_lr
-
-        if critic_opt is not None:
-            self.critic_opt = critic_opt
-            self.critic_lr = None
-        else:
-            assert(critic_lr is not None)
-            # learning rate will be updated before each backprop
-            self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr = 0)
-            self.critic_lr = critic_lr
-
-
-        self.critic_loss_function = torch.nn.MSELoss()
+            self.opt = torch.optim.Adam(self.agent.parameters(), lr = 0)
+            self.lr = lr
 
         self.action_count = 0
         self.update_count = 0
@@ -133,12 +133,9 @@ class ppo(Agent):
         self.update_count += 1
 
         # Update learning rates, which can be dynamic parameters
-        if self.actor_lr is not None:
-            for g in self.actor_opt.param_groups:
-                g['lr'] = float(self.actor_lr)
-        if self.critic_lr is not None:
-            for g in self.critic_opt.param_groups:
-                g['lr'] = float(self.critic_lr)
+        if self.lr is not None:
+            for g in self.opt.param_groups:
+                g['lr'] = float(self.lr)
 
         # Get all data for this epoch from memory 
         all_states = torch.FloatTensor().to(self.device)
@@ -159,7 +156,7 @@ class ppo(Agent):
         # Save value of beta for this epoch
         self.current_beta = float(self.beta)
         def compute_actor_loss():
-            _, logps, entropy = self.actor(states, actions)
+            _, logps, entropy = self.agent.actor(states, actions)
             self.entropies.append(entropy.mean().item())
             ratio = torch.exp(logps - old_logps)
             # For transitions with positive advantage,
@@ -174,7 +171,7 @@ class ppo(Agent):
             return adv_loss + ent_loss
 
         def compute_critic_loss():
-            return 0.5 * ((self.critic(states) - returns)**2).mean()
+            return 0.5 * ((self.agent.critic(states) - returns)**2).mean()
 
         self.actor_loss = []
         self.critic_loss = []
@@ -196,19 +193,17 @@ class ppo(Agent):
                 advantages = all_advantages[minibatch_indexes]
                 old_logps = all_old_logps[minibatch_indexes]
 
-                # Train actor
-                self.actor_opt.zero_grad()
-                loss = compute_actor_loss()
-                loss.backward()
-                self.actor_loss.append(loss.item())
-                self.actor_opt.step()
+                self.opt.zero_grad()
+                actor_loss = compute_actor_loss()
+                self.actor_loss.append(actor_loss.item())
 
-                # Train critic
-                self.critic_opt.zero_grad()
-                loss = compute_critic_loss()
+                critic_loss = compute_critic_loss()
+                self.critic_loss.append(critic_loss.item())
+
+                loss = actor_loss + self.critic_coef * critic_loss
                 loss.backward()
-                self.critic_loss.append(loss.item())
-                self.critic_opt.step()
+                torch.nn.utils.clip_grad_norm_(self.agent.parameters(), self.max_grad_norm)
+                self.opt.step()
 
     def save_model(self):
         #filename = self.get_model_filename()
@@ -221,15 +216,14 @@ class ppo(Agent):
 
         self.tb_log.add_scalars(self.name, {'score': score}, self.episode)
 
-        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:.2e} {:.2e}. LR={:.2e} {:.2e} entropy={:.2g}".format(
+        print("Time {}. Episode {}. Action {}. Score {:0.0f}. Avg loss={:.2e} {:.2e}. LR={:.2e} entropy={:.2g}".format(
             datetime.timedelta(seconds=elapsed_time), 
             self.episode, 
             self.action_count, 
             score, 
             np.average(self.actor_loss),
             np.average(self.critic_loss),
-            self.actor_opt.param_groups[0]['lr'],
-            self.critic_opt.param_groups[0]['lr'],
+            self.opt.param_groups[0]['lr'],
             np.average(self.entropies)
             ))
 

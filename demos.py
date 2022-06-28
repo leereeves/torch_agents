@@ -124,8 +124,7 @@ def ppo_demo(env_name, render_mode=None):
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
             updates_per_epoch=10,
-            actor_lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
-            critic_lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
+            lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
             beta = 0,
             gamma = 0.99,
             lambd = 0.95,
@@ -203,12 +202,12 @@ def ppo_cartpole_demo(render_mode=None):
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
             updates_per_epoch=4,
-            actor_lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
-            critic_lr = schedule.Linear(max_epochs, 1.25e-4, 0).asfloat(),
+            lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
             gamma = 0.99,
             lambd = 0.95,
             beta = 0.01,
             epsilon = 0.2,
+            critic_coef = 0.5
     )
     return agent.train()
 
