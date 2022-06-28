@@ -37,7 +37,7 @@ class ppo(Agent):
                     clip_pos=None,
                     max_epochs=50,
                     steps_per_epoch=1000,
-                    training_iterations_per_epoch=100,
+                    updates_per_epoch=100,
                     checkpoint_filename=None,
                     ):
 
@@ -60,7 +60,7 @@ class ppo(Agent):
 
         self.max_epochs = max_epochs
         self.steps_per_epoch = steps_per_epoch
-        self.training_iterations_per_epoch = training_iterations_per_epoch
+        self.updates_per_epoch = updates_per_epoch
 
         # Create actor and critic
         self.critic = networks.SqueezeNet(critic_net).to(self.device)
@@ -141,20 +141,20 @@ class ppo(Agent):
                 g['lr'] = float(self.critic_lr)
 
         # Get all data for this epoch from memory 
-        states = torch.FloatTensor().to(self.device)
-        actions = torch.FloatTensor().to(self.device)
-        returns = torch.FloatTensor().to(self.device)
-        advantages = torch.FloatTensor().to(self.device)
-        old_logps = torch.FloatTensor().to(self.device)
+        all_states = torch.FloatTensor().to(self.device)
+        all_actions = torch.FloatTensor().to(self.device)
+        all_returns = torch.FloatTensor().to(self.device)
+        all_advantages = torch.FloatTensor().to(self.device)
+        all_old_logps = torch.FloatTensor().to(self.device)
 
         for i in range(self.env_count):
             env_states, env_actions, _, _, _, env_returns, env_advantages, env_old_logps = \
                 self.to_tensors(*self.memory[i].get())
-            states = torch.cat((states, env_states))
-            actions = torch.cat((actions, env_actions))
-            returns = torch.cat((returns, env_returns))
-            advantages = torch.cat((advantages, env_advantages))
-            old_logps = torch.cat((old_logps, env_old_logps))
+            all_states = torch.cat((all_states, env_states))
+            all_actions = torch.cat((all_actions, env_actions))
+            all_returns = torch.cat((all_returns, env_returns))
+            all_advantages = torch.cat((all_advantages, env_advantages))
+            all_old_logps = torch.cat((all_old_logps, env_old_logps))
 
         # Save value of beta for this epoch
         self.current_beta = float(self.beta)
@@ -174,26 +174,41 @@ class ppo(Agent):
             return adv_loss + ent_loss
 
         def compute_critic_loss():
-            return ((self.critic(states) - returns)**2).mean()
+            return 0.5 * ((self.critic(states) - returns)**2).mean()
 
-        # Train actor
         self.actor_loss = []
-        self.entropies = []
-        for i in range(self.training_iterations_per_epoch):
-            self.actor_opt.zero_grad()
-            loss = compute_actor_loss()
-            loss.backward()
-            self.actor_loss.append(loss.item())
-            self.actor_opt.step()
-
-        # Train critic
         self.critic_loss = []
-        for i in range(self.training_iterations_per_epoch):
-            self.critic_opt.zero_grad()
-            loss = compute_critic_loss()
-            loss.backward()
-            self.critic_loss.append(loss.item())
-            self.critic_opt.step()
+        self.entropies = []
+
+        data_size = all_states.shape[0]
+        minibatch_size = 32
+        for i in range(self.updates_per_epoch):
+            all_indexes = np.arange(data_size)
+            np.random.shuffle(all_indexes)
+
+            for start in range(0, data_size, minibatch_size):
+                # Prepare minibatch
+                end = start + minibatch_size
+                minibatch_indexes = all_indexes[start:end]
+                states = all_states[minibatch_indexes]
+                actions = all_actions[minibatch_indexes]
+                returns = all_returns[minibatch_indexes]
+                advantages = all_advantages[minibatch_indexes]
+                old_logps = all_old_logps[minibatch_indexes]
+
+                # Train actor
+                self.actor_opt.zero_grad()
+                loss = compute_actor_loss()
+                loss.backward()
+                self.actor_loss.append(loss.item())
+                self.actor_opt.step()
+
+                # Train critic
+                self.critic_opt.zero_grad()
+                loss = compute_critic_loss()
+                loss.backward()
+                self.critic_loss.append(loss.item())
+                self.critic_opt.step()
 
     def save_model(self):
         #filename = self.get_model_filename()

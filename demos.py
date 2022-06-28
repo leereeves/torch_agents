@@ -123,7 +123,7 @@ def ppo_demo(env_name, render_mode=None):
     agent = ppo(env_name, env, actor_net, critic_net, 
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
-            training_iterations_per_epoch=10,
+            updates_per_epoch=10,
             actor_lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
             critic_lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
             beta = 0,
@@ -178,17 +178,36 @@ def ppo_cartpole_demo(render_mode=None):
     steps_per_epoch=128
     max_epochs=max_steps//steps_per_epoch
 
-    actor_net = networks.MLP([state_size, 64, 64, 2], activation=torch.nn.Tanh)
-    critic_net = networks.MLP([state_size, 64, 64, 1], activation=torch.nn.Tanh)
+    def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
+        torch.nn.init.orthogonal_(layer.weight, std)
+        torch.nn.init.constant_(layer.bias, bias_const)
+        return layer
+
+    actor_net = torch.nn.Sequential(
+        layer_init(torch.nn.Linear(state_size, 64)),
+        torch.nn.Tanh(),
+        layer_init(torch.nn.Linear(64, 64)),
+        torch.nn.Tanh(),
+        layer_init(torch.nn.Linear(64, 2), std=0.01),
+    )
+    critic_net = torch.nn.Sequential(
+        layer_init(torch.nn.Linear(state_size, 64)),
+        torch.nn.Tanh(),
+        layer_init(torch.nn.Linear(64, 64)),
+        torch.nn.Tanh(),
+        layer_init(torch.nn.Linear(64, 1), std=1.0),
+    )
+    #actor_net = networks.MLP([state_size, 64, 64, 2], activation=torch.nn.Tanh)
+    #critic_net = networks.MLP([state_size, 64, 64, 1], activation=torch.nn.Tanh)
     agent = ppo(env_name, envs, actor_net, critic_net, 
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
-            training_iterations_per_epoch=50,
+            updates_per_epoch=4,
             actor_lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
-            critic_lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
+            critic_lr = schedule.Linear(max_epochs, 1.25e-4, 0).asfloat(),
             gamma = 0.99,
             lambd = 0.95,
-            beta = schedule.Linear(max_epochs, 0.01, 0).asfloat(),
+            beta = 0.01,
             epsilon = 0.2,
     )
     return agent.train()
