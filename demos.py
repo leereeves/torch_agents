@@ -166,20 +166,21 @@ def grid_search(f, **grid):
 def ppo_cartpole_demo(render_mode=None):
     env_name = "CartPole-v1"
 
-    env = environments.GymEnv(
+    envs = [environments.GymEnv(
             name=env_name, 
             render_mode=render_mode,
             valid_actions=[0,1]
             )
-    state_size = env.env.observation_space.shape[0]
+            for _ in range(4)]
+    state_size = envs[0].env.observation_space.shape[0]
 
     max_steps=500000
-    steps_per_epoch=500
+    steps_per_epoch=128
     max_epochs=max_steps//steps_per_epoch
 
-    actor_net = networks.MLP([state_size, 64, 64, 2])
-    critic_net = networks.MLP([state_size, 64, 64, 1])
-    agent = ppo(env_name, env, actor_net, critic_net, 
+    actor_net = networks.MLP([state_size, 64, 64, 2], activation=torch.nn.Tanh)
+    critic_net = networks.MLP([state_size, 64, 64, 1], activation=torch.nn.Tanh)
+    agent = ppo(env_name, envs, actor_net, critic_net, 
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
             training_iterations_per_epoch=50,

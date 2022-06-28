@@ -1,0 +1,13 @@
+PPO: multiple environments, early stopping, KL divergence, more environments
+
+SAC, TD3, A2C, C51 ...
+
+Agent base class
+
+Better logging/Tensorboarding
+
+video wrapper
+
+tests
+
+tests for 100% of dynamic hyperparameters

@@ -23,7 +23,7 @@ from .. import memory, networks
 # arXiv preprint arXiv:1707.06347 (2017).
 
 class ppo(Agent):
-    def __init__(self, name, env, actor_net, critic_net,  
+    def __init__(self, name, envs, actor_net, critic_net,
                     device=None, 
                     actor_opt=None,
                     critic_opt=None,
@@ -44,8 +44,12 @@ class ppo(Agent):
         super().__init__(device)
 
         self.name = name
-        self.env = env
-        
+        if isinstance(envs, (list, tuple)):
+            self.envs = envs
+        else:
+            self.envs = [envs]
+        self.env_count = len(self.envs)
+
         self.beta = beta
         self.current_beta = 0
         self.gamma = gamma
@@ -62,11 +66,12 @@ class ppo(Agent):
         self.critic = networks.SqueezeNet(critic_net).to(self.device)
 
         # Create online memory
-        self.memory = memory.OnPolicyAdvantageMemory(self.steps_per_epoch, self.gamma, self.lambd)
+        self.memory = [memory.OnPolicyAdvantageMemory(self.steps_per_epoch, self.gamma, self.lambd) for i in range(self.env_count)]
 
-        if isinstance(env.env.action_space, gym.spaces.Box):
-            self.actor = networks.NormalDistFromMeanNet(actor_net, env.env.action_space.shape[0]).to(self.device)
-        elif isinstance(env.env.action_space, gym.spaces.Discrete):
+        action_space = self.envs[0].env.action_space
+        if isinstance(action_space, gym.spaces.Box):
+            self.actor = networks.NormalDistFromMeanNet(actor_net, action_space.shape[0]).to(self.device)
+        elif isinstance(action_space, gym.spaces.Discrete):
             self.actor = networks.CategoricalDistFromLogitsNet(actor_net).to(self.device)
 
         if actor_opt is not None:
@@ -136,8 +141,20 @@ class ppo(Agent):
                 g['lr'] = float(self.critic_lr)
 
         # Get all data for this epoch from memory 
-        states, actions, new_states, rewards, dones, \
-            returns, advantages, old_logps = self.to_tensors(*self.memory.get())
+        states = torch.FloatTensor().to(self.device)
+        actions = torch.FloatTensor().to(self.device)
+        returns = torch.FloatTensor().to(self.device)
+        advantages = torch.FloatTensor().to(self.device)
+        old_logps = torch.FloatTensor().to(self.device)
+
+        for i in range(self.env_count):
+            env_states, env_actions, _, _, _, env_returns, env_advantages, env_old_logps = \
+                self.to_tensors(*self.memory[i].get())
+            states = torch.cat((states, env_states))
+            actions = torch.cat((actions, env_actions))
+            returns = torch.cat((returns, env_returns))
+            advantages = torch.cat((advantages, env_advantages))
+            old_logps = torch.cat((old_logps, env_old_logps))
 
         # Save value of beta for this epoch
         self.current_beta = float(self.beta)
@@ -206,7 +223,7 @@ class ppo(Agent):
             self.save_model()
 
         self.episode += 1
-        self.scores.append(score)
+        self.score_historys.append(score)
 
     def train(self):
 
@@ -221,36 +238,45 @@ class ppo(Agent):
         self.critic_loss = [0]
         self.entropies = [0]
 
-        self.scores = []
+        self.score_historys = [[] for i in range(self.env_count)]
+        scores = [0] * self.env_count
+        states = [None] * self.env_count
+
+        for i in range(len(self.envs)):
+            states[i] = self.envs[i].reset()
 
         for self.epoch in range(int(self.max_epochs)):
-            state = self.env.reset()
-            score = 0
             for self.step_in_epoch in range(int(self.steps_per_epoch)):
-                with torch.no_grad():
-                    state_tensor = self.to_tensor(state)
-                    action, logp, _ = self.to_numpy(self.actor(state_tensor))
-                    value = self.to_numpy(self.critic(state_tensor))
-                new_state, reward, done, info, life_lost = self.env.step(action)
-                self.action_count += 1
-                score += reward
-                self.memory.store_transition(state, action, new_state, reward, done or life_lost, value, logp)
-                if(done):
-                    state = self.env.reset()
-                    self.on_end_of_episode(score)
-                    score = 0
+                # For each step, act in every environment and record transition
+                for i in range(len(self.envs)):
                     with torch.no_grad():
-                        state_tensor = self.to_tensor(state)
+                        state_tensor = self.to_tensor(states[i])
+                        action, logp, _ = self.to_numpy(self.actor(state_tensor))
                         value = self.to_numpy(self.critic(state_tensor))
-                        self.memory.end_episode(value)
-                else:
-                    state = new_state
+                    new_state, reward, done, info, life_lost = self.envs[i].step(action)
+                    self.action_count += 1
+                    scores[i] += reward
+                    self.memory[i].store_transition(states[i], action, new_state, reward, done or life_lost, value, logp)
+                    if(done):
+                        states[i] = self.envs[i].reset()
+                        self.on_end_of_episode(scores[i])
+                        scores[i] = 0
+                        with torch.no_grad():
+                            state_tensor = self.to_tensor(states[i])
+                            value = self.to_numpy(self.critic(state_tensor))
+                            self.memory[i].end_episode(value)
+                    else:
+                        states[i] = new_state
+                # end for i in range(len(self.envs)):
+            # end for self.step_in_epoch in range(int(self.steps_per_epoch)):
 
+            # Update networks and reset all memory
             self.update()
 
-            self.memory.reset()
+            for i in range(len(self.envs)):
+                self.memory[i].reset()
 
         self.env.close()
         self.tb_log.close()
 
-        return self.scores
+        return self.score_historys
