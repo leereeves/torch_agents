@@ -6,6 +6,7 @@ import torch
 from torch_agents.agents.dqn import dqn
 from torch_agents.agents.ddpg import ddpg
 from torch_agents.agents.ppo import ppo
+from torch_agents.agents.sac import SAC
 from torch_agents import memory
 from torch_agents import networks
 from torch_agents import explore
@@ -84,15 +85,15 @@ def ddpg_demo(env_name, render_mode=None):
             render_mode=render_mode
             )
     state_size = env.env.observation_space.shape[0]
-    num_actions = env.env.action_space.shape[0]
+    action_size = env.env.action_space.shape[0]
 
-    actor_net = networks.ContinuousActorNetwork(state_size, num_actions)
-    critic_net = networks.StateActionCriticNetwork(state_size, num_actions)
+    actor_net = networks.ContinuousActorNetwork(state_size, action_size)
+    critic_net = networks.QMLP(state_size, action_size, [400,300])
     mem = memory.ReplayMemory(1e6)
     noise = explore.GaussianNoise(
             mu=0.0,
             sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
-            size=num_actions
+            size=action_size
             )
     agent = ddpg(env_name, env, actor_net, critic_net, mem, noise, 
             actor_lr = 0.0001,
@@ -211,6 +212,21 @@ def ppo_cartpole_demo(render_mode=None):
     )
     return agent.train()
 
+# Demo of Soft Actor Critic
+def sac_demo(env_name, render_mode=None):
+    env = environments.GymEnv(
+            name=env_name, 
+            render_mode=render_mode
+            )
+
+    hp = SAC.Hyperparams()
+    hp.max_actions=1000000
+    hp.actor_lr = 3e-4
+    hp.critic_lr = 1e-3
+
+    agent = SAC(env, hp)
+    agent.train()
+
 # Main entry point
 if __name__=="__main__":
     if len(sys.argv) < 2:
@@ -240,6 +256,9 @@ if __name__=="__main__":
     if request == 'ddpg-humanoid':
         ddpg_demo("Humanoid-v4")
 
+    if request == 'ddpg-pendulum':
+        ddpg_demo("Pendulum-v1")
+
     if request == 'ppo-pendulum':
         ppo_demo("Pendulum-v1")
 
@@ -256,3 +275,6 @@ if __name__=="__main__":
             #actor_lr=[1e-4, 2e-4, 3e-4],
             #critic_lr=[1e-3, 3e-4]
             )
+
+    if request == 'sac-pendulum':
+        sac_demo("Pendulum-v1")

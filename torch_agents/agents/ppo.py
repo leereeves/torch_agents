@@ -73,7 +73,7 @@ class ppo(Agent):
         self.updates_per_epoch = updates_per_epoch
 
         # Create actor and critic
-        self.critic = networks.SqueezeNet(critic_net).to(self.device)
+        self.critic = networks.Squeeze(critic_net).to(self.device)
 
         # Create online memory
         self.memory = [memory.OnPolicyAdvantageMemory(self.steps_per_epoch, self.gamma, self.lambd) for i in range(self.env_count)]

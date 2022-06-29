@@ -4,7 +4,7 @@ import gym
 import numpy as np
 import random
 
-class TaskInterface(object):
+class EnvInterface(object):
     def __init__(self, name):
         self.name = name
         return
@@ -22,7 +22,7 @@ class TaskInterface(object):
         raise NotImplementedError
 
 
-class GymEnv(TaskInterface):
+class GymEnv(EnvInterface):
     def __init__(self, name, render_mode=None, valid_actions=None, action_repeat=1, frameskip=None):
         super().__init__(name)
         self.render_mode = render_mode

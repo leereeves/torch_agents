@@ -1,6 +1,9 @@
+from turtle import forward
 import numpy as np
 import torch
-from torch.nn import Linear, ReLU
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 
 # Fully connected network 
 class MLP(torch.nn.Module):
@@ -17,7 +20,35 @@ class MLP(torch.nn.Module):
         
     def forward(self, state):
         return self.network(state)
-   
+
+# An MLP that accepts a state and action as inputs and returns a single value   
+class QMLP(torch.nn.Module):
+    def __init__(self, state_size, num_actions, hidden_sizes, activation=torch.nn.ReLU):
+        super().__init__()
+        layer_sizes = [state_size+num_actions] + hidden_sizes + [1]
+        self.mlp = MLP(layer_sizes, activation)
+
+    def forward(self, state, action):
+        return self.mlp(torch.cat([state,action],1))
+
+
+# An MLP that splits before the last layer and has multiple output layers
+class SplitMLP(torch.nn.Module):
+    def __init__(self, layer_sizes, splits, activation=nn.ReLU):
+        super().__init__()
+        output_size = layer_sizes.pop(-1)
+        self.mlp = MLP(layer_sizes, activation)
+        self.outputs = nn.ModuleList([torch.nn.Linear(layer_sizes[-1], output_size) for _ in range(splits)])
+        self.f = activation()
+
+    def forward(self, x):
+        results = []
+        x = self.f(self.mlp(x))
+        for o in self.outputs:
+            results.append(o(x))
+        return tuple(results)
+
+
 # Convolutional network for Atari games, as described in Mnih 2015
 class Mnih2015Atari(torch.nn.Module):
     def __init__(self, action_space_size):
@@ -61,14 +92,6 @@ class ContinuousActorNetwork(torch.nn.Module):
     def forward(self, x):
         return self.tanh(self.mlp(x))
 
-class StateActionCriticNetwork(torch.nn.Module):
-    def __init__(self, state_size, num_actions, hidden1=400, hidden2=300, init_w=3e-3):
-        super().__init__()
-        self.mlp = MLP([state_size+num_actions, hidden1, hidden2, 1])
-
-    def forward(self, state, action):
-        return self.mlp(torch.cat([state,action],1))
-
 
 class CategoricalDistFromLogitsNet(torch.nn.Module):
     
@@ -105,7 +128,68 @@ class NormalDistFromMeanNet(torch.nn.Module):
         entropy = pi.entropy()
         return action, logp, entropy
 
-class SqueezeNet(torch.nn.Module):
+class NormalActorFromMeanAndStd(torch.nn.Module):
+
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+
+    def forward(self, state, action=None):
+        LOG_STD_MAX = 2
+        LOG_STD_MIN = -5
+
+        mu, log_sigma = self.net(state)
+        # Bound the log standard deviation between LOG_STD_MIN and LOG_STD_MAX
+        # The range -5 to 2 comes from CleanRL, who attribute it to SpinUp / Denis Yarats
+        log_sigma = (torch.tanh(log_sigma) + 1) / 2
+        log_sigma = LOG_STD_MIN + (LOG_STD_MAX - LOG_STD_MIN) * log_sigma
+        sigma = torch.exp(log_sigma)
+        policy = torch.distributions.Normal(loc=mu, scale=sigma)
+        # If no action is given, take a random sample
+        if action is None:
+            action = policy.rsample()
+        logp = policy.log_prob(action)
+        return action, logp
+
+# BoundActor implements "Enforcing Action Bounds" from Appendix C of 
+# the soft-actor critic paper: Haarnoja, Tuomas, et al., 2018
+# An action, log probability pair from an unbounded distribution 
+# with infinite support is bounded between mins and maxes, and
+# the log probability of this bound action is adjusted appropriately.
+class BoundActor(nn.Module):
+    def __init__(self, actor, mins, maxs) -> None:
+        super().__init__()
+        # actor is a nn.Module whose forward function returns action, logp
+        self.actor = actor
+        # scale is divided by 2 because the range of tanh is 2 (-1 to 1)
+        self.scale = torch.FloatTensor((maxs - mins) / 2.0)
+        # bias is just the midpoint of min and max
+        self.bias = torch.FloatTensor((maxs + mins) / 2.0)
+
+    def forward(self, state, action=None):
+        # Save a tiny constant to add before taking log, to avoid log 0
+        tiny_float = torch.finfo(torch.float16).tiny 
+
+        # Get the action and log probability from the unbound actor
+        u, logp_u = self.actor(state, action)
+
+        # Compute the new log probability for the change of variables a = tanh(u)
+        tanh_u = torch.tanh(u)
+        log_da_over_du = torch.log(self.scale * (1 - tanh_u**2) + tiny_float)
+        logp_a = logp_u - log_da_over_du.sum(-1, keepdim=True)
+
+        # Compute the bound action
+        action = tanh_u * self.scale + self.bias
+
+        # Return the bound action and log probability
+        return action, logp_a
+
+    def to(self, device):
+        self.scale = self.scale.to(device)
+        self.bias = self.bias.to(device)
+        return super().to(device)
+
+class Squeeze(torch.nn.Module):
     def __init__(self, net):
         super().__init__()
         self.net = net
