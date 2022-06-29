@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter 
 
-from .. import memory, networks
+from .. import memory, networks, schedule
 from ..environments import EnvInterface
 
 from .agent import *
@@ -30,6 +30,9 @@ class OffPolicyAgent(Agent):
     def to_tensor(self, x, dtype = np.float32):
         return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
 
+    def update_hyperparams(self):
+        for param, value in vars(self.hp).items():
+            setattr(self.current, param, float(value))
 
 ################################################################################
 # Soft Actor Critic (SAC) Agent
@@ -52,7 +55,7 @@ class SAC(OffPolicyAgent):
             self.target_update_rate = 1
             self.clip_rewards = False
             self.gamma = 0.99
-            self.alpha = 0.2
+            self.temperature = 0.2
 
     # Network modules required by the agent
     class Modules(nn.Module):
@@ -77,8 +80,11 @@ class SAC(OffPolicyAgent):
     def __init__(self, env:EnvInterface, hp:Hyperparams, modules:Modules=None, device=None):
         super().__init__(device, env)
         self.hp = hp
+        self.current = deepcopy(hp)
+        self.update_hyperparams()
+
         self.status = SAC.Status()
-        self.memory = memory.ReplayMemory(self.hp.memory_size)
+        self.memory = memory.ReplayMemory(self.current.memory_size)
 
         state_size = np.array(env.env.observation_space.shape).prod()
         action_size = np.array(env.env.action_space.shape).prod()
@@ -115,21 +121,21 @@ class SAC(OffPolicyAgent):
         # Many agents don't start training until the replay
         # buffer has enough samples to reduce correlation 
         # in each minibatch of the training data.
-        if self.status.action_count < self.hp.warmup_actions:
+        if self.status.action_count < self.current.warmup_actions:
             return
 
         # Ensure we have enough memory to sample a full minibatch
-        if len(self.memory) < self.hp.minibatch_size:
+        if len(self.memory) < self.current.minibatch_size:
             return
 
         # TODO: Update learning rates, which can be dynamic parameters
-        #if self.hp.lr is not None:
+        #if self.current.lr is not None:
             #for g in self.actor_opt.param_groups:
-            #    g['lr'] = float(self.hp.lr)
+            #    g['lr'] = float(self.current.lr)
 
         # Update target networks, possibly on a different 
         # schedule than minibatch updates
-        if self.status.action_count % self.hp.target_update_freq == 0:
+        if self.status.action_count % self.current.target_update_freq == 0:
             self.update_targets()
 
         #####
@@ -138,14 +144,14 @@ class SAC(OffPolicyAgent):
         # calling the agent specific function minibatch_update()
 
         # Some agents don't update every action
-        if self.status.action_count % self.hp.update_freq != 0:
+        if self.status.action_count % self.current.update_freq != 0:
             return
 
         # All requirements are satisfied, it's time for an update
         self.status.update_count += 1
 
         # Get a sample from the replay memory
-        _, batch, _ = self.memory.sample(self.hp.minibatch_size)
+        _, batch, _ = self.memory.sample(int(self.current.minibatch_size))
         # Rearrange from list of transitions to lists of states, actions, etc
         list_of_data_lists = list(zip(*batch))
         # Convert to tensors
@@ -156,7 +162,7 @@ class SAC(OffPolicyAgent):
         self.minibatch_update(states, actions, next_states, rewards, dones)
 
     def update_target(self, live, target):
-        tau = self.hp.target_update_rate
+        tau = self.current.target_update_rate
         for param, target_param in zip(live.parameters(), target.parameters()):
             target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
 
@@ -180,13 +186,13 @@ class SAC(OffPolicyAgent):
 
             # To compute the soft Q value, which maximizes entropy, we add an unbiased 
             # estimate of the entropy, again computed by sampling:
-            next_soft_q = next_q - self.hp.alpha * sampled_actions_log_p.squeeze(-1)
+            next_soft_q = next_q - self.current.temperature * sampled_actions_log_p.squeeze(-1)
 
             # Then we force the estimated soft Q value of terminal states to be zero:
             next_soft_q_zeroed = next_soft_q * (1 - dones)
 
             # Finally, the target Q value is computed with the Bellman equation:
-            target_q = rewards + self.hp.gamma * next_soft_q_zeroed
+            target_q = rewards + self.current.gamma * next_soft_q_zeroed
 
         # Compute and minimize the critic loss
         # We train both Q networks to predict the target Q value
@@ -208,16 +214,16 @@ class SAC(OffPolicyAgent):
         q1 = self.modules.critic1(states, actions).squeeze(-1)
         q2 = self.modules.critic2(states, actions).squeeze(-1)
         min_q = torch.min(q1, q2)
-        actor_loss = ((self.hp.alpha * actions_log_p) - min_q).mean()
+        actor_loss = ((self.current.temperature * actions_log_p) - min_q).mean()
 
         self.modules.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.modules.actor_optimizer.step()
 
-        # TODO: autotune alpha
+        # TODO: autotune temperature
 
     def choose_action(self, state):
-        if self.status.action_count < self.hp.warmup_actions:
+        if self.status.action_count < self.current.warmup_actions:
             # TODO: match action scale to the environment
             action = np.random.rand(1) * 2 - 1
         else:
@@ -247,12 +253,12 @@ class SAC(OffPolicyAgent):
         score = 0
         done = 0
         # This loops through actions (4 frames for Atari, 1 frame for most envs)
-        for self.status.action_count in range(int(self.hp.max_actions)):
+        for self.status.action_count in range(int(self.current.max_actions)):
             action = self.choose_action(state)
             new_state, reward, done, info, life_lost = self.env.step(action)
             self.status.action_count += 1
             score += reward
-            if self.hp.clip_rewards:
+            if self.current.clip_rewards:
                 clipped_reward = np.sign(reward)
             else:
                 clipped_reward = reward
@@ -268,12 +274,13 @@ class SAC(OffPolicyAgent):
 
                 #tb_log.add_scalars(self.name, {'score': scores[-1]}, self.episode)
 
-                print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}.".format(
+                print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. temp={:0.3f}".format(
                     datetime.timedelta(seconds=elapsed_time), 
                     self.status.episode_count, 
                     self.status.action_count, 
                     score, 
-                    moving_average
+                    moving_average,
+                    self.current.temperature
                     ))
 
                 state = self.env.reset()
@@ -284,6 +291,9 @@ class SAC(OffPolicyAgent):
             #if self.episode > 0 and self.episode % 10 == 0:
             #    print("Saving model {}".format(self.get_model_filename()))
             #    self.save_model()
+
+            self.update_hyperparams()
+        # end for self.status.action_count in range(int(self.current.max_actions)):
 
         self.env.close()
         #tb_log.close()
