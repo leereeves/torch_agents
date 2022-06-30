@@ -1,7 +1,5 @@
 import datetime
-import math
 import numpy as np
-import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -14,30 +12,6 @@ from .. import memory, networks, schedule
 from ..environments import EnvInterface
 
 from .agent import *
-
-class OffPolicyAgent(Agent):
-    def __init__(self, device, env:EnvInterface):
-        super().__init__(device)
-        self.env = env
-
-    # Convert a Torch tensor to a numpy array,
-    # And if that tensor is on the GPU, move to CPU
-    def to_numpy(self, tensors):
-        return tensors.cpu().numpy()
-
-    # Convert a single object understood by np.asarray to a tensor
-    # and move the tensor to our device
-    def to_tensor(self, x, dtype = np.float32):
-        return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
-
-    def update_hyperparams(self):
-        for param, value in vars(self.hp).items():
-            setattr(self.current, param, float(value))
-
-    def update_lr(self, optimizer, lr):
-        if lr is not None:
-            for g in optimizer.param_groups:
-                g['lr'] = lr
 
 ################################################################################
 # Soft Actor Critic (SAC) Agent
@@ -69,8 +43,8 @@ class SAC(OffPolicyAgent):
             self.actor = None
             self.critic1 = None
             self.critic2 = None
-            self.critic_optimizer = None
             self.actor_optimizer = None
+            self.critic_optimizer = None
 
     # Current status of the agent, updated every step
     class Status(object):
@@ -79,12 +53,13 @@ class SAC(OffPolicyAgent):
             self.episode_count = 0
             self.update_count = 0
             self.score_history = []
+            self.elapsed_time = 0
 
     #######################################################
     # The agent itself begins here
     def __init__(self, env:EnvInterface, hp:Hyperparams, modules:Modules=None, device=None):
         super().__init__(device, env)
-        self.hp = hp
+        self.hp = deepcopy(hp)
         self.current = deepcopy(hp)
         self.update_hyperparams()
 
@@ -114,61 +89,12 @@ class SAC(OffPolicyAgent):
         modules.critic2 = modules.critic2.to(self.device)
         modules.critic1_target = modules.critic1_target.to(self.device)
         modules.critic2_target = modules.critic2_target.to(self.device)
+
         critic_params = list(modules.critic1.parameters()) + list(modules.critic2.parameters())
         modules.critic_optimizer = optim.Adam(critic_params, lr=self.current.critic_lr)
         modules.actor_optimizer = optim.Adam(list(modules.actor.parameters()), lr=self.current.actor_lr)
 
         self.modules = modules
-
-
-    def update_model(self):
-
-        # Many agents don't start training until the replay
-        # buffer has enough samples to reduce correlation 
-        # in each minibatch of the training data.
-        if self.status.action_count < self.current.warmup_actions:
-            return
-
-        # Ensure we have enough memory to sample a full minibatch
-        if len(self.memory) < self.current.minibatch_size:
-            return
-
-        # Update learning rates, which can be dynamic parameters
-        self.update_lr(self.modules.actor_optimizer, self.current.actor_lr)
-        self.update_lr(self.modules.critic_optimizer, self.current.critic_lr)
-
-        # Update target networks, possibly on a different 
-        # schedule than minibatch updates
-        if self.status.action_count % self.current.target_update_freq == 0:
-            self.update_targets()
-
-        #####
-        # Beyond this point, we begin the parameter update. The code
-        # here handles prep steps shared by all agents before
-        # calling the agent specific function minibatch_update()
-
-        # Some agents don't update every action
-        if self.status.action_count % self.current.update_freq != 0:
-            return
-
-        # All requirements are satisfied, it's time for an update
-        self.status.update_count += 1
-
-        # Get a sample from the replay memory
-        _, batch, _ = self.memory.sample(int(self.current.minibatch_size))
-        # Rearrange from list of transitions to lists of states, actions, etc
-        list_of_data_lists = list(zip(*batch))
-        # Convert to tensors
-        states, actions, next_states, rewards, dones = \
-            map(self.to_tensor, list_of_data_lists)
-
-        # Update the gradient (every algorithm implements this differently)
-        self.minibatch_update(states, actions, next_states, rewards, dones)
-
-    def update_target(self, live, target):
-        tau = self.current.target_update_rate
-        for param, target_param in zip(live.parameters(), target.parameters()):
-            target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
 
     def update_targets(self):
         self.update_target(self.modules.critic1, self.modules.critic1_target)
@@ -228,7 +154,7 @@ class SAC(OffPolicyAgent):
 
     def choose_action(self, state):
         if self.status.action_count < self.current.warmup_actions:
-            # TODO: match action scale to the environment
+            # TODO: handle multidimensional actions, scale and bound actions
             action = np.random.rand(1) * 2 - 1
         else:
             with torch.no_grad():
@@ -237,72 +163,22 @@ class SAC(OffPolicyAgent):
                 action = self.to_numpy(action)
         return action
 
-    # Training loop for off-policy agents
-    def train(self):
+    def on_episode_end(self):
+        #tb_log.add_scalars(self.name, {'score': scores[-1]}, self.episode)
 
-        # Open Tensorboard log
-        #path = "./tensorboard/" + datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        #tb_log = SummaryWriter(path)
+        moving_average = np.average(self.status.score_history[-20:])
 
-        # Log hyperparameters
-        #for key, value in self.config.items():
-        #    tb_log.add_text(key, str(value))
+        print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. lr={:0.2e} {:0.2e} temp={:0.3f}".format(
+            datetime.timedelta(seconds=self.status.elapsed_time), 
+            self.status.episode_count, 
+            self.status.action_count, 
+            self.status.score_history[-1], 
+            moving_average,
+            self.current.actor_lr,
+            self.current.critic_lr,
+            self.current.temperature
+            ))
 
-        start = time.time()
-
-        self.status.score_history = []
-        self.status.episode_count = 0
-
-        state = self.env.reset()
-        score = 0
-        done = 0
-        # This loops through actions (4 frames for Atari, 1 frame for most envs)
-        for self.status.action_count in range(int(self.current.max_actions)):
-            action = self.choose_action(state)
-            new_state, reward, done, info, life_lost = self.env.step(action)
-            self.status.action_count += 1
-            score += reward
-            if self.current.clip_rewards:
-                clipped_reward = np.sign(reward)
-            else:
-                clipped_reward = reward
-            self.memory.store_transition(state, action, new_state, clipped_reward, done or life_lost)
-            self.update_model()
-            state = new_state
-
-            if done:
-                self.status.episode_count += 1
-                elapsed_time = math.ceil(time.time() - start)
-                self.status.score_history.append(score)
-                moving_average = np.average(self.status.score_history[-20:])
-
-                #tb_log.add_scalars(self.name, {'score': scores[-1]}, self.episode)
-
-                print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. lr={:0.2e} {:0.2e} temp={:0.3f}".format(
-                    datetime.timedelta(seconds=elapsed_time), 
-                    self.status.episode_count, 
-                    self.status.action_count, 
-                    score, 
-                    moving_average,
-                    self.current.actor_lr,
-                    self.current.critic_lr,
-                    self.current.temperature
-                    ))
-
-                state = self.env.reset()
-                score = 0
-                done = 0
-            # end if done
-
-            #if self.episode > 0 and self.episode % 10 == 0:
-            #    print("Saving model {}".format(self.get_model_filename()))
-            #    self.save_model()
-
-            self.update_hyperparams()
-        # end for self.status.action_count in range(int(self.current.max_actions)):
-
-        self.env.close()
-        #tb_log.close()
 
 
 """
