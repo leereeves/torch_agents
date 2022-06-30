@@ -34,6 +34,11 @@ class OffPolicyAgent(Agent):
         for param, value in vars(self.hp).items():
             setattr(self.current, param, float(value))
 
+    def update_lr(self, optimizer, lr):
+        if lr is not None:
+            for g in optimizer.param_groups:
+                g['lr'] = lr
+
 ################################################################################
 # Soft Actor Critic (SAC) Agent
 
@@ -64,7 +69,7 @@ class SAC(OffPolicyAgent):
             self.actor = None
             self.critic1 = None
             self.critic2 = None
-            self.q_optimizer = None
+            self.critic_optimizer = None
             self.actor_optimizer = None
 
     # Current status of the agent, updated every step
@@ -110,8 +115,8 @@ class SAC(OffPolicyAgent):
         modules.critic1_target = modules.critic1_target.to(self.device)
         modules.critic2_target = modules.critic2_target.to(self.device)
         critic_params = list(modules.critic1.parameters()) + list(modules.critic2.parameters())
-        modules.q_optimizer = optim.Adam(critic_params, lr=hp.critic_lr)
-        modules.actor_optimizer = optim.Adam(list(modules.actor.parameters()), lr=hp.actor_lr)
+        modules.critic_optimizer = optim.Adam(critic_params, lr=self.current.critic_lr)
+        modules.actor_optimizer = optim.Adam(list(modules.actor.parameters()), lr=self.current.actor_lr)
 
         self.modules = modules
 
@@ -128,10 +133,9 @@ class SAC(OffPolicyAgent):
         if len(self.memory) < self.current.minibatch_size:
             return
 
-        # TODO: Update learning rates, which can be dynamic parameters
-        #if self.current.lr is not None:
-            #for g in self.actor_opt.param_groups:
-            #    g['lr'] = float(self.current.lr)
+        # Update learning rates, which can be dynamic parameters
+        self.update_lr(self.modules.actor_optimizer, self.current.actor_lr)
+        self.update_lr(self.modules.critic_optimizer, self.current.critic_lr)
 
         # Update target networks, possibly on a different 
         # schedule than minibatch updates
@@ -202,9 +206,9 @@ class SAC(OffPolicyAgent):
         q2_loss = F.mse_loss(q2, target_q)
         q_loss = q1_loss + q2_loss
 
-        self.modules.q_optimizer.zero_grad()
+        self.modules.critic_optimizer.zero_grad()
         q_loss.backward()
-        self.modules.q_optimizer.step()
+        self.modules.critic_optimizer.step()
 
         # Compute and minimize the actor loss
         # Here we maximize the soft Q value
@@ -274,12 +278,14 @@ class SAC(OffPolicyAgent):
 
                 #tb_log.add_scalars(self.name, {'score': scores[-1]}, self.episode)
 
-                print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. temp={:0.3f}".format(
+                print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. lr={:0.2e} {:0.2e} temp={:0.3f}".format(
                     datetime.timedelta(seconds=elapsed_time), 
                     self.status.episode_count, 
                     self.status.action_count, 
                     score, 
                     moving_average,
+                    self.current.actor_lr,
+                    self.current.critic_lr,
                     self.current.temperature
                     ))
 
