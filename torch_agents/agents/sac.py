@@ -84,22 +84,45 @@ class ContinuousSAC(OffPolicyAgent):
             super().__init__()
             self.actor = None
             """
-            The actor is a network object derived from torch.nn.Module that accepts a 
-            state and optional action, predicts a policy (a probability distribution
-            over actions) from the state, samples an action if None was provided,
-            and returns the action and the log probability of that action. 
+            A network object derived from torch.nn.Module that includes
+            a forward function with the following signature:
 
-            If no actor is provided, the default actor for environments with discrete 
-            action spaces is an MLP that predicts a Categorical distribution.
-            The default actor for continuous action spaces is an MLP that predicts
-            the mean and standard deviation of a Gaussian distribution which is then
-            bound to (-1, 1) by Tanh and finally scaled to match the environment.
+            forward(state, action = None)
+
+            * state: a tensor of shape (batch size, ) + env.observation_space.shape
+
+            * action: an optional tensor of shape (batch size, ) + env.action_space.shape
+
+            that predicts a policy (a probability distribution over actions) 
+            from the state, samples an action if None was provided,
+            and returns the action and the log probability of that action as
+            
+            return value: (action, logp)
+            
+            * action: a tensor of shape (batch size, ) + env.action_space.shape
+
+            * logp: a tensor of shape (batch size, 1)
+
+            If no actor is provided, the default actor for continuous action spaces 
+            is an MLP that predicts the mean and standard deviation of a Gaussian 
+            distribution which is then limited to (-1, 1) by Tanh and finally scaled 
+            and recentered to match the environments action_range.
             """
             self.critic1 = None
             self.critic2 = None
             """
-            The critics are network objects derived from torch.nn.Module that accept
-            a state and action and predict a single soft Q value.
+            The critics are network objects derived from torch.nn.Module that include
+            a forward function with the following signature:
+            
+            forward(state, action)
+
+            * state: a tensor of shape (batch size, ) + env.observation_space.shape
+
+            * action: a tensor of shape (batch size, ) + env.action_space.shape
+
+            return value: q
+            
+            * q: a single soft Q value of shape (batch size, 1)
 
             If no critics are provided, the default critics are MLPs that concatenate
             the state and action before the first layer.
@@ -129,6 +152,8 @@ class ContinuousSAC(OffPolicyAgent):
             "All scores from completed episodes in chronological order"
             self.elapsed_time = 0
             "Elapsed time since the start of training"
+            self.action_space = None
+            "The environment's action_space"
 
     #######################################################
     # The agent itself begins here
@@ -138,14 +163,16 @@ class ContinuousSAC(OffPolicyAgent):
         self.current = deepcopy(hp)
         self.update_hyperparams()
 
-        self.status = SAC.Status()
+        self.status = ContinuousSAC.Status()
+        self.status.action_space = env.env.action_space
+
         self.memory = memory.ReplayMemory(self.current.memory_size)
 
         state_size = np.array(env.env.observation_space.shape).prod()
         action_size = np.array(env.env.action_space.shape).prod()
 
         if modules is None:
-            modules = SAC.Modules()
+            modules = ContinuousSAC.Modules()
             state_size = np.array(env.env.observation_space.shape).prod()
             action_size = np.array(env.env.action_space.shape).prod()
             lows = env.env.action_space.low
@@ -172,11 +199,28 @@ class ContinuousSAC(OffPolicyAgent):
         self.modules = modules
 
     def update_targets(self):
+        """
+        Update target networks from live networks, called automatically by train()
+        """
         self.update_target(self.modules.critic1, self.modules.critic1_target)
         self.update_target(self.modules.critic2, self.modules.critic2_target)
 
-    # Compute the loss and take one step in SGD
     def minibatch_update(self, states, actions, next_states, rewards, dones):
+        """
+        Update live networks by gradient descent, called automatically by train()
+
+        Arguments:
+        
+        * states: a tensor of shape (minibatch size, ) + env.observation_space.shape
+        
+        * actions: a tensor of shape (minibatch size, ) + env.action_space.shape
+        
+        * next_states: a tensor of shape (minibatch size, ) + env.observation_space.shape
+        
+        * rewards: a tensor of shape (minibatch size, )
+        
+        * dones: a tensor of shape (minibatch size, )
+        """
         with torch.no_grad():
             # We compute an unbiased estimate of the Q values of the next 
             # states by using an action sampled from the current policy:
@@ -228,17 +272,31 @@ class ContinuousSAC(OffPolicyAgent):
         # TODO: autotune temperature
 
     def choose_action(self, state):
+        """
+        Choose an action from the given state, called automatically by train()
+
+        * state: a tensor of shape env.observation_space.shape
+
+        return value: action
+
+        * action: a numpy array or a tensor of shape env.action_space.shape
+        """
         if self.status.action_count < self.current.warmup_actions:
-            # TODO: handle multidimensional actions, scale and bound actions
-            action = np.random.rand(1) * 2 - 1
+            # Sample random numbers in uniform(0, 1) with shape to match the action_space
+            r = np.random.rand(np.array(self.status.action_space.shape).prod())
+            # Rescale and offset 
+            scale = self.status.action_space.high - self.status.action_space.low
+            action = r * scale + self.status.action_space.low
         else:
+            # Ask the actor to choose the action
             with torch.no_grad():
-                state_tensor = self.to_tensor(state)
-                action, _ = self.modules.actor(state_tensor)
-                action = self.to_numpy(action)
+                action, _ = self.modules.actor(state)
         return action
 
     def on_episode_end(self):
+        """
+        Called automatically by train() at the end of an episode
+        """
         #tb_log.add_scalars(self.name, {'score': scores[-1]}, self.episode)
 
         moving_average = np.average(self.status.score_history[-20:])

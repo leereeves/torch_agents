@@ -33,13 +33,19 @@ class OffPolicyAgent(Agent):
 
     # Convert a Torch tensor to a numpy array,
     # And if that tensor is on the GPU, move to CPU
-    def to_numpy(self, tensors):
-        return tensors.cpu().numpy()
+    def to_numpy(self, x, dtype = np.float32):
+        if torch.is_tensor(x):
+            return x.cpu().numpy()
+        else:
+            return np.asarray(x, dtype=dtype)
 
     # Convert a single object understood by np.asarray to a tensor
     # and move the tensor to our device
     def to_tensor(self, x, dtype = np.float32):
-        return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
+        if torch.is_tensor(x):
+            return x.to(self.device)
+        else:
+            return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
 
     def update_hyperparams(self):
         for param, value in vars(self.hp).items():
@@ -120,7 +126,8 @@ class OffPolicyAgent(Agent):
         done = 0
         # This loops through actions (4 frames for Atari, 1 frame for most envs)
         for self.status.action_count in range(int(self.current.max_actions)):
-            action = self.choose_action(state)
+            state_tensor = self.to_tensor(state)
+            action = self.to_numpy(self.choose_action(state_tensor))
             new_state, reward, done, info, life_lost = self.env.step(action)
             self.status.action_count += 1
             score += reward
