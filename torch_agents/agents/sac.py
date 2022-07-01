@@ -17,6 +17,33 @@ from .agent import *
 # Soft Actor Critic (SAC) Agent
 
 class SAC(OffPolicyAgent):
+    """
+    Soft Actor Critic is:
+
+        * a policy gradient algorithm,
+
+        * that attempts to maximize Q-values,
+
+        * and also maximize entropy in the policy distribution,
+
+        * balanced by a temperature hyperparameter.
+
+        * It is off-policy,
+
+        * and model-free.
+
+    Implementation details:
+
+    Inspired by TD3, version 2 of the SAC paper added twin delayed critic 
+    networks, which this implementation includes.
+
+    This implementation's default critic for continuous environments 
+    uses a Gaussian distribution. This is simple and computationally 
+    efficient, but unable to learn multi-modal distributions 
+    (distributions with more than one peak). This implementation should,
+    however, be compatible with custom critics that use any distribution
+    with differentiable log probabilities.
+    """
 
     # Hyperparameters to configure the agent, 
     # these may be ints, floats, or schedules 
@@ -24,36 +51,81 @@ class SAC(OffPolicyAgent):
     class Hyperparams(object):
         def __init__(self):
             self.max_actions = 1000
+            "How many actions to take during training, unless stopped early"
             self.actor_lr = None
+            "Learning rate for the actor, can be a constant or a schedule"
             self.critic_lr = None
+            "Learning rate for the critic, can be a constant or a schedule"
             self.memory_size = 1e6
+            "Size of the replay buffer"
             self.minibatch_size = 32
+            "Number of transitions in each minibatch"
             self.warmup_actions = 0
+            "Random actions to take before training the networks"
             self.update_freq = 1
+            "How often to perform a minibatch_update()"
             self.target_update_freq = 1
+            "Actions to take between target network updates"
             self.target_update_rate = 1
+            "Sometimes called tau, how much to update the target network"
             self.clip_rewards = False
+            "If true, all rewards are set to -1, 0, or 1"
             self.gamma = 0.99
+            "Discount factor for Q-values"
             self.temperature = 0.2
+            "Balances Q-values with entropy (higher favors more entropy)"
 
     # Network modules required by the agent
     class Modules(nn.Module):
         def __init__(self):
             super().__init__()
             self.actor = None
+            """
+            The actor is a network object derived from torch.nn.Module that accepts a 
+            state and optional action, predicts a policy (a probability distribution
+            over actions) from the state, samples an action if None was provided,
+            and returns the action and the log probability of that action. 
+
+            If no actor is provided, the default actor for environments with discrete 
+            action spaces is an MLP that predicts a Categorical distribution.
+            The default actor for continuous action spaces is an MLP that predicts
+            the mean and standard deviation of a Gaussian distribution which is then
+            bound to (-1, 1) by Tanh and finally scaled to match the environment.
+            """
             self.critic1 = None
             self.critic2 = None
+            """
+            The critics are network objects derived from torch.nn.Module that accept
+            a state and action and predict a single soft Q value.
+
+            If no critics are provided, the default critics are MLPs that concatenate
+            the state and action before the first layer.
+            """
             self.actor_optimizer = None
+            """
+            An optimization algorithm from (or compatible with) torch.optim 
+            for the actor parameters. If none is provided, Adam will be used.
+            """
             self.critic_optimizer = None
+            """
+            An optimization algorithm from (or compatible with) torch.optim 
+            for the parameters of both critic networks. If none is provided, 
+            Adam will be used.
+            """
 
     # Current status of the agent, updated every step
     class Status(object):
         def __init__(self):
             self.action_count = 0
-            self.episode_count = 0
+            "How many actions the agent has taken"
             self.update_count = 0
+            "How many minibatch updates the agent has performed"
+            self.episode_count = 0
+            "How many episodes the agent has completed"
             self.score_history = []
+            "All scores from completed episodes in chronological order"
             self.elapsed_time = 0
+            "Elapsed time since the start of training"
 
     #######################################################
     # The agent itself begins here

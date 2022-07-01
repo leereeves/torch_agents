@@ -132,13 +132,15 @@ class OffPolicyAgent(Agent):
             self.update_model()
             state = new_state
 
+            self.status.elapsed_time = math.ceil(time.time() - start)
+
             if done:
                 self.status.episode_count += 1
-                self.status.elapsed_time = math.ceil(time.time() - start)
                 self.status.score_history.append(score)
 
                 self.on_episode_end()
 
+                # Reset for the start of a new episode
                 state = self.env.reset()
                 score = 0
                 done = 0
