@@ -14,9 +14,9 @@ from ..environments import EnvInterface
 from .agent import *
 
 ################################################################################
-# Soft Actor Critic (SAC) Agent
+# Soft Actor Critic (SAC) Agent for environments with continuous action spaces
 
-class SAC(OffPolicyAgent):
+class ContinuousSAC(OffPolicyAgent):
     """
     Soft Actor Critic is:
 
@@ -32,6 +32,9 @@ class SAC(OffPolicyAgent):
 
         * and model-free.
 
+    This version of SAC supports continuous actions. See SACDiscrete
+    for a version of SAC that supports discrete actions.
+
     Implementation details:
 
     Inspired by TD3, version 2 of the SAC paper added twin delayed critic 
@@ -41,8 +44,8 @@ class SAC(OffPolicyAgent):
     uses a Gaussian distribution. This is simple and computationally 
     efficient, but unable to learn multi-modal distributions 
     (distributions with more than one peak). This implementation should,
-    however, be compatible with custom critics that use any distribution
-    with differentiable log probabilities.
+    however, be compatible with custom actors that use any distribution
+    with differentiable action samples (e.g. via reparameterization).
     """
 
     # Hyperparameters to configure the agent, 

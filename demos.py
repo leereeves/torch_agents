@@ -6,7 +6,7 @@ import torch
 from torch_agents.agents.dqn import dqn
 from torch_agents.agents.ddpg import ddpg
 from torch_agents.agents.ppo import ppo
-from torch_agents.agents.sac import SAC
+from torch_agents.agents.sac import ContinuousSAC
 from torch_agents import memory
 from torch_agents import networks
 from torch_agents import explore
@@ -219,13 +219,13 @@ def sac_demo(env_name, render_mode=None):
             render_mode=render_mode
             )
 
-    hp = SAC.Hyperparams()
+    hp = ContinuousSAC.Hyperparams()
     hp.max_actions=1000000
     hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
     hp.critic_lr = schedule.Linear(hp.max_actions, 1e-3, 0).asfloat()
     hp.temperature = schedule.Linear(hp.max_actions, 0.2, 0).asfloat()
 
-    agent = SAC(env, hp)
+    agent = ContinuousSAC(env, hp)
     agent.train()
 
 # Main entry point
