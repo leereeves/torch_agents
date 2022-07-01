@@ -149,7 +149,8 @@ class NormalActorFromMeanAndStd(torch.nn.Module):
         if action is None:
             action = policy.rsample()
         logp = policy.log_prob(action)
-        return action, logp
+        entropy = policy.entropy()
+        return action, logp, entropy
 
 # BoundActor implements "Enforcing Action Bounds" from Appendix C of 
 # the soft-actor critic paper: Haarnoja, Tuomas, et al., 2018
@@ -162,32 +163,43 @@ class BoundActor(nn.Module):
         # actor is a nn.Module whose forward function returns action, logp
         self.actor = actor
         # scale is divided by 2 because the range of tanh is 2 (-1 to 1)
-        self.scale = torch.FloatTensor((maxs - mins) / 2.0)
+        self.scale = nn.Parameter(torch.FloatTensor((maxs - mins) / 2.0), requires_grad=False)
         # bias is just the midpoint of min and max
-        self.bias = torch.FloatTensor((maxs + mins) / 2.0)
+        self.bias = nn.Parameter(torch.FloatTensor((maxs + mins) / 2.0), requires_grad=False)
 
     def forward(self, state, action=None):
         # Save a tiny constant to add before taking log, to avoid log 0
         tiny_float = torch.finfo(torch.float16).tiny 
 
         # Get the action and log probability from the unbound actor
-        u, logp_u = self.actor(state, action)
+        u, logp_u, entropy = self.actor(state, action)
 
-        # Compute the new log probability for the change of variables a = tanh(u)
+        # Compute the new log probability under the change of variables 
+        # a_i = scale_i * tanh(u_i) + bias_i
         tanh_u = torch.tanh(u)
-        log_da_over_du = torch.log(self.scale * (1 - tanh_u**2) + tiny_float)
+        da_over_du = self.scale * (1 - tanh_u**2)
+        log_da_over_du = torch.log(da_over_du + tiny_float)
         logp_a = logp_u - log_da_over_du.sum(-1, keepdim=True)
 
         # Compute the bound action
         action = tanh_u * self.scale + self.bias
 
-        # Return the bound action and log probability
-        return action, logp_a
+        # Estimate a correction for the entropy under the change of variables. 
+        # a_i = scale_i * tanh(u_i) + bias_i
+        # Reference:
+        # Hnizdo, Vladimir, and Michael K. Gilson. 
+        # "Thermodynamic and differential entropy under a change of variables." 
+        # Entropy 12.3 (2010): 578-590.
+        # https://www.mdpi.com/1099-4300/12/3/578
+        # The exact formula for the correction is an expectation across all
+        # possible actions, which is intractable in general. Therefore, this
+        # entropy is only an estimate and should only be used for diagnostics.
+        entropy += log_da_over_du.sum(-1, keepdim=True)
 
-    def to(self, device):
-        self.scale = self.scale.to(device)
-        self.bias = self.bias.to(device)
-        return super().to(device)
+        # Return the bound action, the log probability of that action, 
+        # and the total entropy of the policy.
+        return action, logp_a, entropy
+
 
 class Squeeze(torch.nn.Module):
     def __init__(self, net):

@@ -49,7 +49,10 @@ class OffPolicyAgent(Agent):
 
     def update_hyperparams(self):
         for param, value in vars(self.hp).items():
-            setattr(self.current, param, float(value))
+            if value is None:
+                setattr(self.current, param, None)
+            else:
+                setattr(self.current, param, float(value))
 
     def update_lr(self, optimizer, lr):
         if lr is not None:

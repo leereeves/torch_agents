@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import types
 
 from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter 
@@ -76,7 +77,19 @@ class ContinuousSAC(OffPolicyAgent):
             self.gamma = 0.99
             "Discount factor for Q-values"
             self.temperature = 0.2
-            "Balances Q-values with entropy (higher favors more entropy)"
+            """
+            Balances Q-values with entropy (higher favors more entropy).
+            The effect of temperature varies with the scale and frequency of
+            rewards, so it is generally preferable to use target_entropy.
+            Despite that, this is the default hyperparameter for entropy 
+            maximization because it is easier to understand.
+            """
+            self.target_entropy = None
+            """"
+            If set, the temperature is tuned automatically to drive the
+            average entropy toward target_entropy, and the temperature
+            hyperparameter is ignored.
+            """
 
     # Network modules required by the agent
     class Modules(nn.Module):
@@ -95,13 +108,15 @@ class ContinuousSAC(OffPolicyAgent):
 
             that predicts a policy (a probability distribution over actions) 
             from the state, samples an action if None was provided,
-            and returns the action and the log probability of that action as
+            and returns the action, log probability of that action, and entropy as
             
-            return value: (action, logp)
+            return value: (action, logp, entropy)
             
             * action: a tensor of shape (batch size, ) + env.action_space.shape
 
             * logp: a tensor of shape (batch size, 1)
+
+            * entropy: a tensor of shape (batch size, 1)
 
             If no actor is provided, the default actor for continuous action spaces 
             is an MLP that predicts the mean and standard deviation of a Gaussian 
@@ -152,8 +167,8 @@ class ContinuousSAC(OffPolicyAgent):
             "All scores from completed episodes in chronological order"
             self.elapsed_time = 0
             "Elapsed time since the start of training"
-            self.action_space = None
-            "The environment's action_space"
+            self.entropy = 0
+            "Average entropy in the most recent minibatch of policy distributions pi(s_t)"
 
     #######################################################
     # The agent itself begins here
@@ -164,7 +179,8 @@ class ContinuousSAC(OffPolicyAgent):
         self.update_hyperparams()
 
         self.status = ContinuousSAC.Status()
-        self.status.action_space = env.env.action_space
+        self.internals = types.SimpleNamespace()
+        self.internals.action_space = env.env.action_space
 
         self.memory = memory.ReplayMemory(self.current.memory_size)
 
@@ -196,6 +212,11 @@ class ContinuousSAC(OffPolicyAgent):
         modules.critic_optimizer = optim.Adam(critic_params, lr=self.current.critic_lr)
         modules.actor_optimizer = optim.Adam(list(modules.actor.parameters()), lr=self.current.actor_lr)
 
+        # Optimizer required to automatically adjust temperature
+        if self.current.target_entropy is not None:
+            self.internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
+            modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=1e-3)
+            self.hp.temperature = 0
         self.modules = modules
 
     def update_targets(self):
@@ -221,10 +242,14 @@ class ContinuousSAC(OffPolicyAgent):
         
         * dones: a tensor of shape (minibatch size, )
         """
+        # Use tuned temperature if we're doing that
+        if self.current.target_entropy is not None:
+            self.current.temperature = self.internals.log_temperature.exp().item()
+
         with torch.no_grad():
             # We compute an unbiased estimate of the Q values of the next 
             # states by using an action sampled from the current policy:
-            sampled_actions, sampled_actions_log_p = \
+            sampled_actions, sampled_actions_log_p, _ = \
                 self.modules.actor(next_states)
 
             # For stability, we estimate Q values with delayed (target) networks, 
@@ -259,7 +284,7 @@ class ContinuousSAC(OffPolicyAgent):
         # Here we maximize the soft Q value
         # (which is entropy, E[-log pi], plus the Q value)
         # by minimizing -1 times the soft Q value
-        actions, actions_log_p = self.modules.actor(states)
+        actions, actions_log_p, actor_entropy = self.modules.actor(states)
         q1 = self.modules.critic1(states, actions).squeeze(-1)
         q2 = self.modules.critic2(states, actions).squeeze(-1)
         min_q = torch.min(q1, q2)
@@ -269,7 +294,23 @@ class ContinuousSAC(OffPolicyAgent):
         actor_loss.backward()
         self.modules.actor_optimizer.step()
 
-        # TODO: autotune temperature
+        self.status.entropy = actor_entropy.mean()
+
+        # Automatically adjust temperature, see reference 2
+        if self.current.target_entropy is not None:
+            # Recompute probabilities with new actor parameters
+            with torch.no_grad():
+                _, log_p, _ = self.modules.actor(states)
+            # Optimize a Monte Carlo estimate of the loss function
+            # from equation 18 in reference 2:
+            # J(\alpha) = E_{a_t \tilde \pi_t} [-\alpha \log \pi_t(a_t | s_t) - \alpha \bar H]
+            alpha = self.internals.log_temperature.exp()
+            temp_loss = (alpha * (-log_p - self.current.target_entropy)).mean()
+
+            self.modules.entropy_optimizer.zero_grad()
+            temp_loss.backward()
+            self.modules.entropy_optimizer.step()
+
 
     def choose_action(self, state):
         """
@@ -283,14 +324,16 @@ class ContinuousSAC(OffPolicyAgent):
         """
         if self.status.action_count < self.current.warmup_actions:
             # Sample random numbers in uniform(0, 1) with shape to match the action_space
-            r = np.random.rand(np.array(self.status.action_space.shape).prod())
+            d = np.array(self.internals.action_space.shape).prod()
+            r = np.random.rand(d)
             # Rescale and offset 
-            scale = self.status.action_space.high - self.status.action_space.low
-            action = r * scale + self.status.action_space.low
+            scale = self.internals.action_space.high - self.internals.action_space.low
+            action = r * scale + self.internals.action_space.low
+            self.status.entropy = np.log(scale).sum()
         else:
             # Ask the actor to choose the action
             with torch.no_grad():
-                action, _ = self.modules.actor(state)
+                action, _, _ = self.modules.actor(state)
         return action
 
     def on_episode_end(self):
@@ -301,7 +344,7 @@ class ContinuousSAC(OffPolicyAgent):
 
         moving_average = np.average(self.status.score_history[-20:])
 
-        print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. lr={:0.2e} {:0.2e} temp={:0.3f}".format(
+        print("Time {}. Episode {}. Action {}. Score {:0.0f}. MAvg={:0.1f}. lr={:0.2e} {:0.2e} temp={:0.3f} entropy={:0.3f}".format(
             datetime.timedelta(seconds=self.status.elapsed_time), 
             self.status.episode_count, 
             self.status.action_count, 
@@ -309,7 +352,8 @@ class ContinuousSAC(OffPolicyAgent):
             moving_average,
             self.current.actor_lr,
             self.current.critic_lr,
-            self.current.temperature
+            self.current.temperature,
+            self.status.entropy
             ))
 
 
@@ -317,8 +361,15 @@ class ContinuousSAC(OffPolicyAgent):
 """
 References
 
-Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy deep 
+Soft Actor-Critic Algorithm from:
+
+1: Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy deep 
 reinforcement learning with a stochastic actor." International conference on 
 machine learning. PMLR, 2018.
+
+Temperature tuning from:
+
+2: Haarnoja, Tuomas, et al. "Soft actor-critic algorithms and applications." 
+arXiv preprint arXiv:1812.05905 (2018).
 
 """
