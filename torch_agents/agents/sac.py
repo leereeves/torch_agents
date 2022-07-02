@@ -56,13 +56,13 @@ class ContinuousSAC(OffPolicyAgent):
         def __init__(self):
             self.max_actions = 1000
             "How many actions to take during training, unless stopped early"
-            self.actor_lr = None
+            self.actor_lr = 3e-4
             "Learning rate for the actor, can be a constant or a schedule"
-            self.critic_lr = None
+            self.critic_lr = 3e-4
             "Learning rate for the critic, can be a constant or a schedule"
             self.memory_size = 1e6
             "Size of the replay buffer"
-            self.minibatch_size = 32
+            self.minibatch_size = 256
             "Number of transitions in each minibatch"
             self.warmup_actions = 0
             "Random actions to take before training the networks"
@@ -218,7 +218,7 @@ class ContinuousSAC(OffPolicyAgent):
         # Optimizer required to automatically adjust temperature
         if self.current.target_entropy is not None:
             self.internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
-            modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=1e-3)
+            modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=3e-4)
             self.hp.temperature = 0
         self.modules = modules
 
