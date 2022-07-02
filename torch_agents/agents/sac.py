@@ -70,7 +70,7 @@ class ContinuousSAC(OffPolicyAgent):
             "How often to perform a minibatch_update()"
             self.target_update_freq = 1
             "Actions to take between target network updates"
-            self.target_update_rate = 1
+            self.target_update_rate = 0.005
             "Sometimes called tau, how much to update the target network"
             self.clip_rewards = False
             "If true, all rewards are set to -1, 0, or 1"
@@ -85,11 +85,13 @@ class ContinuousSAC(OffPolicyAgent):
             maximization because it is easier to understand.
             """
             self.target_entropy = None
-            """"
+            """
             If set, the temperature is tuned automatically to drive the
             average entropy toward target_entropy, and the temperature
             hyperparameter is ignored.
             """
+            self.hidden_size = 256
+            "Width of hidden layers"
 
     # Network modules required by the agent
     class Modules(nn.Module):
@@ -193,11 +195,12 @@ class ContinuousSAC(OffPolicyAgent):
             action_size = np.array(env.env.action_space.shape).prod()
             lows = env.env.action_space.low
             highs = env.env.action_space.high
-            mlp = networks.SplitMLP([state_size, 64, 64, action_size], splits=2)
+            h = int(self.current.hidden_size)
+            mlp = networks.SplitMLP([state_size, h, h, action_size], splits=2)
             gaussian = networks.NormalActorFromMeanAndStd(mlp)
             modules.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
-            modules.critic1 = networks.QMLP(state_size, action_size, [64, 64])
-            modules.critic2 = networks.QMLP(state_size, action_size, [64, 64])
+            modules.critic1 = networks.QMLP(state_size, action_size, [h, h])
+            modules.critic2 = networks.QMLP(state_size, action_size, [h, h])
 
         modules.critic1_target = deepcopy(modules.critic1)
         modules.critic2_target = deepcopy(modules.critic2)
@@ -260,7 +263,7 @@ class ContinuousSAC(OffPolicyAgent):
 
             # To compute the soft Q value, which maximizes entropy, we add an unbiased 
             # estimate of the entropy, again computed by sampling:
-            next_soft_q = next_q - self.current.temperature * sampled_actions_log_p.squeeze(-1)
+            next_soft_q = next_q - self.current.temperature * sampled_actions_log_p.sum(-1)
 
             # Then we force the estimated soft Q value of terminal states to be zero:
             next_soft_q_zeroed = next_soft_q * (1 - dones)
@@ -288,7 +291,7 @@ class ContinuousSAC(OffPolicyAgent):
         q1 = self.modules.critic1(states, actions).squeeze(-1)
         q2 = self.modules.critic2(states, actions).squeeze(-1)
         min_q = torch.min(q1, q2)
-        actor_loss = ((self.current.temperature * actions_log_p) - min_q).mean()
+        actor_loss = ((self.current.temperature * actions_log_p.sum(-1)) - min_q).mean()
 
         self.modules.actor_optimizer.zero_grad()
         actor_loss.backward()
