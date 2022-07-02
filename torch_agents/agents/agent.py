@@ -89,19 +89,21 @@ class OffPolicyAgent(Agent):
         if self.status.action_count % self.current.update_freq != 0:
             return
 
-        # All requirements are satisfied, it's time for an update
+        # All requirements are satisfied
         self.status.update_count += 1
+        for _ in range(int(self.current.minibatches_per_update)):
+            self.status.minibatch_count += 1
+            # Prepare a minibatch:
+            #   Get a sample from the replay memory
+            _, batch, _ = self.memory.sample(int(self.current.minibatch_size))
+            #   Rearrange from list of transitions to lists of states, actions, etc
+            list_of_data_lists = list(zip(*batch))
+            #   Convert to tensors
+            states, actions, next_states, rewards, dones = \
+                map(self.to_tensor, list_of_data_lists)
 
-        # Get a sample from the replay memory
-        _, batch, _ = self.memory.sample(int(self.current.minibatch_size))
-        # Rearrange from list of transitions to lists of states, actions, etc
-        list_of_data_lists = list(zip(*batch))
-        # Convert to tensors
-        states, actions, next_states, rewards, dones = \
-            map(self.to_tensor, list_of_data_lists)
-
-        # Update the gradient (every algorithm implements this differently)
-        self.minibatch_update(states, actions, next_states, rewards, dones)
+            # Call a derived class function to descend the gradient with this minibatch
+            self.minibatch_update(states, actions, next_states, rewards, dones)
 
     def update_target(self, live, target):
         tau = self.current.target_update_rate
@@ -139,11 +141,15 @@ class OffPolicyAgent(Agent):
             else:
                 clipped_reward = reward
             self.memory.store_transition(state, action, new_state, clipped_reward, done or life_lost)
-            self.update_model()
             state = new_state
 
+            # Update models
+            self.update_model()
+
+            # Update status
             self.status.elapsed_time = math.ceil(time.time() - start)
 
+            # Handle end of episode
             if done:
                 self.status.episode_count += 1
                 self.status.score_history.append(score)

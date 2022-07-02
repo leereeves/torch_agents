@@ -68,6 +68,8 @@ class ContinuousSAC(OffPolicyAgent):
             "Random actions to take before training the networks"
             self.update_freq = 1
             "How often to perform a minibatch_update()"
+            self.minibatches_per_update = 1
+            "How many minibatch gradients to compute and apply during an update"
             self.target_update_freq = 1
             "Actions to take between target network updates"
             self.target_update_rate = 0.005
@@ -162,7 +164,9 @@ class ContinuousSAC(OffPolicyAgent):
             self.action_count = 0
             "How many actions the agent has taken"
             self.update_count = 0
-            "How many minibatch updates the agent has performed"
+            "How many updates the agent has performed"
+            self.minibatch_count = 0
+            "How many minibatch gradients the agent has applied"
             self.episode_count = 0
             "How many episodes the agent has completed"
             self.score_history = []
