@@ -137,10 +137,11 @@ class OffPolicyAgent(Agent):
             self.status.action_count += 1
             score += reward
             if self.current.clip_rewards:
-                clipped_reward = np.sign(reward)
+                adj_reward = np.clip(reward, -1, 1)
             else:
-                clipped_reward = reward
-            self.memory.store_transition(state, action, new_state, clipped_reward, done or life_lost)
+                adj_reward = reward
+            adj_reward *= self.current.reward_scale
+            self.memory.store_transition(state, action, new_state, adj_reward, done or life_lost)
             state = new_state
 
             # Update models

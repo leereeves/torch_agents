@@ -75,7 +75,9 @@ class ContinuousSAC(OffPolicyAgent):
             self.target_update_rate = 0.005
             "Sometimes called tau, how much to update the target network"
             self.clip_rewards = False
-            "If true, all rewards are set to -1, 0, or 1"
+            "If true, all rewards are clipped to the interval [-1, 1]"
+            self.reward_scale = 1
+            "All rewards are multiplied by this number"
             self.gamma = 0.99
             "Discount factor for Q-values"
             self.temperature = 0.2
