@@ -13,9 +13,9 @@ if __name__=="__main__":
     hp = ContinuousSAC.Hyperparams()
     hp.max_actions=3000000
     hp.warmup_actions = 10000
-    
-    hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
-    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
+
+    hp.actor_lr = 3e-4 # schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
+    hp.critic_lr = 3e-4 # schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
 
     hp.reward_scale = 5
     hp.temperature = schedule.Linear(hp.max_actions, 1, 0).asfloat()

@@ -228,6 +228,10 @@ class ContinuousSAC(OffPolicyAgent):
             self.hp.temperature = 0
         self.modules = modules
 
+    def update_learning_rates(self):
+        self.update_lr(self.modules.actor_optimizer, self.current.actor_lr)
+        self.update_lr(self.modules.critic_optimizer, self.current.critic_lr)
+
     def update_targets(self):
         """
         Update target networks from live networks, called automatically by train()

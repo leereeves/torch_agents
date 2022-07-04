@@ -72,8 +72,7 @@ class OffPolicyAgent(Agent):
             return
 
         # Update learning rates, which can be dynamic parameters
-        self.update_lr(self.modules.actor_optimizer, self.current.actor_lr)
-        self.update_lr(self.modules.critic_optimizer, self.current.critic_lr)
+        self.update_learning_rates()
 
         # Update target networks, possibly on a different 
         # schedule than minibatch updates
