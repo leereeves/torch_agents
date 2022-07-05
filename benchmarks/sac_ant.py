@@ -2,7 +2,8 @@ from torch_agents.agents.sac import ContinuousSAC
 from torch_agents import environments
 from torch_agents import schedule
 
-# Soft Actor Critic tuned benchmark for Open AI Gym environment Ant-V4
+# Soft Actor Critic benchmark for Open AI Gym environment Ant-V4
+# With hyperparameters from the SAC paper
 if __name__=="__main__":
 
     env = environments.GymEnv(
@@ -18,7 +19,7 @@ if __name__=="__main__":
     hp.critic_lr = 3e-4 # schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
 
     hp.reward_scale = 5
-    hp.temperature = schedule.Linear(hp.max_actions, 1, 0).asfloat()
+    hp.temperature = 1 # schedule.Linear(hp.max_actions, 1, 0).asfloat()
 
     agent = ContinuousSAC(env, hp)
     agent.train()
