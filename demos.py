@@ -222,8 +222,9 @@ def sac_demo(env_name, render_mode=None):
     hp = ContinuousSAC.Hyperparams()
     hp.max_actions=1000000
     hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
-    hp.critic_lr = schedule.Linear(hp.max_actions, 1e-3, 0).asfloat()
-    hp.target_entropy = schedule.Linear(hp.max_actions, 0.1, 0).asfloat()
+    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
+    hp.temperature_lr = schedule.Linear(hp.max_actions, 1e-3, 0).asfloat()
+    hp.target_entropy = schedule.Linear(hp.max_actions, 0.2, 0).asfloat()
     hp.warmup_actions = 10000
 
     agent = ContinuousSAC(env, hp)

@@ -60,6 +60,8 @@ class ContinuousSAC(OffPolicyAgent):
             "Learning rate for the actor, can be a constant or a schedule"
             self.critic_lr = 3e-4
             "Learning rate for the critic, can be a constant or a schedule"
+            self.temperature_lr = 3e-4
+            "Learning rate for temperature autotuning, can be a constant or a schedule"
             self.memory_size = 1e6
             "Size of the replay buffer"
             self.minibatch_size = 256
@@ -224,13 +226,15 @@ class ContinuousSAC(OffPolicyAgent):
         # Optimizer required to automatically adjust temperature
         if self.current.target_entropy is not None:
             self.internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
-            modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=3e-4)
+            modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=self.current.temperature_lr)
             self.hp.temperature = 0
         self.modules = modules
 
     def update_learning_rates(self):
         self.update_lr(self.modules.actor_optimizer, self.current.actor_lr)
         self.update_lr(self.modules.critic_optimizer, self.current.critic_lr)
+        if self.current.target_entropy is not None:
+            self.update_lr(self.modules.entropy_optimizer, self.current.temperature_lr)
 
     def update_targets(self):
         """
