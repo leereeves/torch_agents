@@ -5,14 +5,6 @@ import torch
 
 from ..environments import EnvInterface
 
-def soft_update(target, source, tau):
-    for t, s in zip(target.parameters(), source.parameters()):
-        t.data.copy_(t.data * (1.0 - tau) + s.data * tau)
-
-def hard_update(target, source):
-    for t,s  in zip(target.parameters(), source.parameters()):
-        t.data.copy_(s.data)
-
 class Agent(object):
     def __init__(self, device, env):
         self.env = env
@@ -33,7 +25,7 @@ class OffPolicyAgent(Agent):
 
     # Convert a Torch tensor to a numpy array,
     # And if that tensor is on the GPU, move to CPU
-    def to_numpy(self, x, dtype = np.float32):
+    def _to_numpy(self, x, dtype = np.float32):
         if torch.is_tensor(x):
             return x.cpu().numpy()
         else:
@@ -41,25 +33,25 @@ class OffPolicyAgent(Agent):
 
     # Convert a single object understood by np.asarray to a tensor
     # and move the tensor to our device
-    def to_tensor(self, x, dtype = np.float32):
+    def _to_tensor(self, x, dtype = np.float32):
         if torch.is_tensor(x):
             return x.to(self.device)
         else:
             return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
 
-    def update_hyperparams(self):
+    def _update_hyperparams(self):
         for param, value in vars(self.hp).items():
             if value is None:
                 setattr(self.current, param, None)
             else:
                 setattr(self.current, param, float(value))
 
-    def update_lr(self, optimizer, lr):
+    def _update_lr(self, optimizer, lr):
         if lr is not None:
             for g in optimizer.param_groups:
                 g['lr'] = lr
 
-    def update_model(self):
+    def _update_model(self):
 
         # Many agents don't start training until the replay
         # buffer has enough samples to reduce correlation 
@@ -72,12 +64,12 @@ class OffPolicyAgent(Agent):
             return
 
         # Update learning rates, which can be dynamic parameters
-        self.update_learning_rates()
+        self._update_learning_rates()
 
         # Update target networks, possibly on a different 
         # schedule than minibatch updates
         if self.status.action_count % self.current.target_update_freq == 0:
-            self.update_targets()
+            self._update_targets()
 
         #####
         # Beyond this point, we begin the parameter update. The code
@@ -99,12 +91,12 @@ class OffPolicyAgent(Agent):
             list_of_data_lists = list(zip(*batch))
             #   Convert to tensors
             states, actions, next_states, rewards, dones = \
-                map(self.to_tensor, list_of_data_lists)
+                map(self._to_tensor, list_of_data_lists)
 
             # Call a derived class function to descend the gradient with this minibatch
-            self.minibatch_update(states, actions, next_states, rewards, dones)
+            self._minibatch_update(states, actions, next_states, rewards, dones)
 
-    def update_target(self, live, target):
+    def _update_target(self, live, target):
         tau = self.current.target_update_rate
         for param, target_param in zip(live.parameters(), target.parameters()):
             target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
@@ -130,8 +122,8 @@ class OffPolicyAgent(Agent):
         done = 0
         # This loops through actions (4 frames for Atari, 1 frame for most envs)
         for self.status.action_count in range(int(self.current.max_actions)):
-            state_tensor = self.to_tensor(state)
-            action = self.to_numpy(self.choose_action(state_tensor))
+            state_tensor = self._to_tensor(state)
+            action = self._to_numpy(self._choose_action(state_tensor))
             new_state, reward, done, info, life_lost = self.env.step(action)
             self.status.action_count += 1
             score += reward
@@ -144,7 +136,7 @@ class OffPolicyAgent(Agent):
             state = new_state
 
             # Update models
-            self.update_model()
+            self._update_model()
 
             # Update status
             self.status.elapsed_time = math.ceil(time.time() - start)
@@ -166,7 +158,7 @@ class OffPolicyAgent(Agent):
             #    print("Saving model {}".format(self.get_model_filename()))
             #    self.save_model()
 
-            self.update_hyperparams()
+            self._update_hyperparams()
         # end for self.status.action_count in range(int(self.current.max_actions)):
 
         self.env.close()

@@ -49,13 +49,14 @@ class ContinuousSAC(OffPolicyAgent):
     with differentiable action samples (e.g. via reparameterization).
     """
 
-    # Hyperparameters to configure the agent, 
-    # these may be ints, floats, or schedules 
-    # derived from class Schedule
     class Hyperparams(object):
+        """
+        Hyperparameters to configure an SAC agent. These may be ints, floats, or schedules 
+        derived from class Schedule.
+        """
         def __init__(self):
             self.max_actions = 1000
-            "How many actions to take during training, unless stopped early"
+            """How many actions to take during training, unless stopped early"""
             self.actor_lr = 3e-4
             "Learning rate for the actor, can be a constant or a schedule"
             self.critic_lr = 3e-4
@@ -186,7 +187,7 @@ class ContinuousSAC(OffPolicyAgent):
         super().__init__(device, env)
         self.hp = deepcopy(hp)
         self.current = deepcopy(hp)
-        self.update_hyperparams()
+        self._update_hyperparams()
 
         self.status = ContinuousSAC.Status()
         self.internals = types.SimpleNamespace()
@@ -230,20 +231,20 @@ class ContinuousSAC(OffPolicyAgent):
             self.hp.temperature = 0
         self.modules = modules
 
-    def update_learning_rates(self):
-        self.update_lr(self.modules.actor_optimizer, self.current.actor_lr)
-        self.update_lr(self.modules.critic_optimizer, self.current.critic_lr)
+    def _update_learning_rates(self):
+        self._update_lr(self.modules.actor_optimizer, self.current.actor_lr)
+        self._update_lr(self.modules.critic_optimizer, self.current.critic_lr)
         if self.current.target_entropy is not None:
-            self.update_lr(self.modules.entropy_optimizer, self.current.temperature_lr)
+            self._update_lr(self.modules.entropy_optimizer, self.current.temperature_lr)
 
-    def update_targets(self):
+    def _update_targets(self):
         """
         Update target networks from live networks, called automatically by train()
         """
-        self.update_target(self.modules.critic1, self.modules.critic1_target)
-        self.update_target(self.modules.critic2, self.modules.critic2_target)
+        self._update_target(self.modules.critic1, self.modules.critic1_target)
+        self._update_target(self.modules.critic2, self.modules.critic2_target)
 
-    def minibatch_update(self, states, actions, next_states, rewards, dones):
+    def _minibatch_update(self, states, actions, next_states, rewards, dones):
         """
         Update live networks by gradient descent, called automatically by train()
 
@@ -329,7 +330,7 @@ class ContinuousSAC(OffPolicyAgent):
             self.modules.entropy_optimizer.step()
 
 
-    def choose_action(self, state):
+    def _choose_action(self, state):
         """
         Choose an action from the given state, called automatically by train()
 
