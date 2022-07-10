@@ -135,18 +135,16 @@ class OnPolicyAdvantageMemory:
         """
         This trick for computing discounted cumulative sum using 
         a scipy filter is discussed here:
-
         "We'd like to calculate C[i] satisfying the recurrence C[i] = R[i] + discount * C[i+1]"
         https://stackoverflow.com/questions/47970683/vectorize-a-numpy-discount-calculation
-
         From [x_0, ..., x_n]
         Calculate: 
-            [
-                x_0 + discount * x_1 + ... + discount^n * x_n,
-                x_1 + discount * x_2 + ... + discount^{n-1} * x_n,
-                ...
-                x_n
-            ]
+        [
+        x_0 + discount * x_1 + ... + discount^n * x_n,
+        x_1 + discount * x_2 + ... + discount^{n-1} * x_n,
+        ...
+        x_n
+        ]
         """
         r = x[::-1]
         a = [1, -discount]

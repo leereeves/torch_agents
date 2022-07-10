@@ -1,4 +1,4 @@
-import schedule
+from . import schedule
 
 from pprint import pprint
 
