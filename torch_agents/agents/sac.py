@@ -19,19 +19,10 @@ from .agent import *
 
 class ContinuousSAC(OffPolicyAgent):
     """
-    Soft Actor Critic is:
-
-        * a policy gradient algorithm,
-
-        * that attempts to maximize Q-values,
-
-        * and also maximize entropy in the policy distribution,
-
-        * balanced by a temperature hyperparameter.
-
-        * It is off-policy,
-
-        * and model-free.
+    Implements Soft Actor Critic (Haarnoja, Tuomas, et al, 2018), 
+    a model-free, off-policy, policy gradient algorithm that maximizes 
+    a combination of Q-values plus entropy in the policy distribution,
+    balanced by a temperature hyperparameter.
 
     This version of SAC supports continuous actions. See SACDiscrete
     for a version of SAC that supports discrete actions.
@@ -41,28 +32,41 @@ class ContinuousSAC(OffPolicyAgent):
     Inspired by TD3, version 2 of the SAC paper added twin delayed critic 
     networks, which this implementation includes.
 
-    This implementation's default critic for continuous environments 
-    uses a Gaussian distribution. This is simple and computationally 
-    efficient, but unable to learn multi-modal distributions 
-    (distributions with more than one peak). This implementation should,
-    however, be compatible with custom actors that use any distribution
-    with differentiable action samples (e.g. via reparameterization).
+    This implementation's default actor for continuous environments 
+    creates a policy with a Gaussian distribution. This is simple and
+    efficient, but unable to learn multi-modal distributions. This 
+    implementation should, however, be compatible with custom actors 
+    that create policies with any distribution that has differentiable
+    action samples (e.g. via reparameterization).
+
+    References
+
+    1: Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy deep 
+    reinforcement learning with a stochastic actor." International conference on 
+    machine learning. PMLR, 2018.
+
+    http://proceedings.mlr.press/v80/haarnoja18b/haarnoja18b.pdf
+
+    2: Haarnoja, Tuomas, et al. "Soft actor-critic algorithms and applications." 
+    arXiv preprint arXiv:1812.05905 (2018).
+
+    https://arxiv.org/pdf/1812.05905.pdf
     """
 
     class Hyperparams(object):
         """
-        Hyperparameters to configure an SAC agent. These may be ints, floats, or schedules 
-        derived from class Schedule.
+        Hyperparameters to configure an SAC agent. These may be ints, floats, or 
+        schedules derived from class Schedule.
         """
         def __init__(self):
             self.max_actions = 1000
             """How many actions to take during training, unless stopped early"""
             self.actor_lr = 3e-4
-            "Learning rate for the actor, can be a constant or a schedule"
+            "Learning rate for the actor optimizer"
             self.critic_lr = 3e-4
-            "Learning rate for the critic, can be a constant or a schedule"
+            "Learning rate for the critic optimizer"
             self.temperature_lr = 3e-4
-            "Learning rate for temperature autotuning, can be a constant or a schedule"
+            "Learning rate for the temperature autotuning optimizer"
             self.memory_size = 1e6
             "Size of the replay buffer"
             self.minibatch_size = 256
@@ -373,21 +377,3 @@ class ContinuousSAC(OffPolicyAgent):
             self.current.temperature,
             self.status.entropy
             ))
-
-
-
-"""
-References
-
-Soft Actor-Critic Algorithm from:
-
-1: Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy deep 
-reinforcement learning with a stochastic actor." International conference on 
-machine learning. PMLR, 2018.
-
-Temperature tuning from:
-
-2: Haarnoja, Tuomas, et al. "Soft actor-critic algorithms and applications." 
-arXiv preprint arXiv:1812.05905 (2018).
-
-"""
