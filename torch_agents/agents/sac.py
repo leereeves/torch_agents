@@ -18,19 +18,20 @@ from .agent import *
 # Soft Actor Critic (SAC) Agent for environments with continuous action spaces
 
 class ContinuousSAC(OffPolicyAgent):
-    """
-    Implements Soft Actor Critic (Haarnoja, Tuomas, et al, 2018), 
-    a model-free, off-policy, policy gradient algorithm that maximizes 
-    a combination of Q-values plus entropy in the policy distribution,
-    balanced by a temperature hyperparameter.
+    """Implements Soft Actor Critic (Haarnoja, Tuomas, et al, 2018).
+
+    Soft Actor Critic is a model-free, off-policy, policy gradient 
+    algorithm that maximizes a combination of Q-values plus entropy 
+    in the policy distribution. The balance between expected returns
+    and entropy is controlled by a temperature hyperparameter.
 
     This version of SAC supports continuous actions. See SACDiscrete
     for a version of SAC that supports discrete actions.
 
-    Implementation details:
+    # Implementation details
 
-    Inspired by TD3, version 2 of the SAC paper added twin delayed critic 
-    networks, which this implementation includes.
+    Version 2 of the SAC paper added twin delayed (target) critic 
+    networks inspired by TD3, which this implementation includes.
 
     This implementation's default actor for continuous environments 
     creates a policy with a Gaussian distribution. This is simple and
@@ -39,24 +40,34 @@ class ContinuousSAC(OffPolicyAgent):
     that create policies with any distribution that has differentiable
     action samples (e.g. via reparameterization).
 
-    References
+    # References
 
-    1: Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy deep 
-    reinforcement learning with a stochastic actor." International conference on 
-    machine learning. PMLR, 2018.
+    Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy 
+    deep reinforcement learning with a stochastic actor." International 
+    conference on machine learning. PMLR, 2018.
 
     http://proceedings.mlr.press/v80/haarnoja18b/haarnoja18b.pdf
 
-    2: Haarnoja, Tuomas, et al. "Soft actor-critic algorithms and applications." 
+    Haarnoja, Tuomas, et al. "Soft actor-critic algorithms and applications." 
     arXiv preprint arXiv:1812.05905 (2018).
 
     https://arxiv.org/pdf/1812.05905.pdf
+
+    # Hyperparameters and training status are organized in several subclasses:
+
+    Attributes:
+        hp (Hyperparams): Initial values or schedules for hyperparameters
+        current (Hyperparams): Current values of hyperparameters
+        status (Status): Current values of public status variables
+        internals: Undocumented internal variables, subject to change.
+        modules (Modules): Modules and optimizers
     """
 
     class Hyperparams(object):
         """
         Hyperparameters to configure an SAC agent. These may be ints, floats, or 
-        schedules derived from class Schedule.
+        schedules derived from class Schedule, allowing any hyperparameter
+        to change dynamically during training.
         """
         def __init__(self):
             self.max_actions = 1000
@@ -104,7 +115,7 @@ class ContinuousSAC(OffPolicyAgent):
             self.hidden_size = 256
             "Width of hidden layers"
 
-    # Network modules required by the agent
+    # Network modules and optimizers required by the agent
     class Modules(nn.Module):
         def __init__(self):
             super().__init__()
@@ -188,6 +199,12 @@ class ContinuousSAC(OffPolicyAgent):
     #######################################################
     # The agent itself begins here
     def __init__(self, env:EnvInterface, hp:Hyperparams, modules:Modules=None, device=None):
+        """
+        Args:
+            env (EnvInterface): An environment from torch_agents.environments
+            hp (Hyperparams): Initial values or schedules for hyperparameters
+            device: A torch.device, a string or int, or None to autodetect.
+        """
         super().__init__(device, env)
         self.hp = deepcopy(hp)
         self.current = deepcopy(hp)
