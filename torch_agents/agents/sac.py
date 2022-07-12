@@ -20,7 +20,7 @@ from .agent import *
 class ContinuousSAC(OffPolicyAgent):
     """Implements Soft Actor Critic (Haarnoja, Tuomas, et al, 2018).
 
-    Soft Actor Critic is a model-free, off-policy, policy gradient 
+    Soft Actor Critic (SAC) is a model-free, off-policy, policy gradient 
     algorithm that maximizes a combination of Q-values plus entropy 
     in the policy distribution. The balance between expected returns
     and entropy is controlled by a temperature hyperparameter.
@@ -199,7 +199,8 @@ class ContinuousSAC(OffPolicyAgent):
     #######################################################
     # The agent itself begins here
     def __init__(self, env:EnvInterface, hp:Hyperparams, modules:Modules=None, device=None):
-        """
+        """Initialize the agent.
+
         Args:
             env (EnvInterface): An environment from torch_agents.environments
             hp (Hyperparams): Initial values or schedules for hyperparameters
@@ -251,6 +252,9 @@ class ContinuousSAC(OffPolicyAgent):
             modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=self.current.temperature_lr)
             self.hp.temperature = 0
         self.modules = modules
+
+    def train():
+        super.train()
 
     def _update_learning_rates(self):
         self._update_lr(self.modules.actor_optimizer, self.current.actor_lr)

@@ -18,6 +18,10 @@ class Agent(object):
                 print("No CUDA device found, or CUDA is not installed. Training on CPU.")
                 self.device = torch.device('cpu')
 
+    def train(self):
+        "Train the agent."
+        pass
+
 
 class OffPolicyAgent(Agent):
     def __init__(self, device, env:EnvInterface):
