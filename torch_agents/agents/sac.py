@@ -73,31 +73,54 @@ class ContinuousSAC(OffPolicyAgent):
             self.max_actions = 1000
             """How many actions to take during training, unless stopped early"""
             self.actor_lr = 3e-4
-            "Learning rate for the actor optimizer"
+            """Learning rate for the actor optimizer. This can be used both to 
+            initialize the default optimizer and to provide adaptive learning 
+            rate schedules for any optimizer. Default value is 3e-4."""
             self.critic_lr = 3e-4
-            "Learning rate for the critic optimizer"
+            """Learning rate for the critic optimizer. This can be used both to 
+            initialize the default optimizer and to provide adaptive learning 
+            rate schedules for any optimizer. Default value is 3e-4."""
             self.temperature_lr = 3e-4
-            "Learning rate for the temperature autotuning optimizer"
+            """Learning rate for the temperature autotuning optimizer. This can 
+            be used both to initialize the default optimizer and to provide 
+            adaptive learning rate schedules for any optimizer. Default value 
+            is 3e-4."""
             self.memory_size = 1e6
-            "Size of the replay buffer"
+            "Size of the replay buffer. Default value is 1e6."
             self.minibatch_size = 256
-            "Number of transitions in each minibatch"
+            "Number of transitions in each minibatch. Default value is 256."
             self.warmup_actions = 0
-            "Random actions to take before training the networks"
+            "Random actions to take before training the networks. Default is zero."
             self.update_freq = 1
-            "How often to perform a minibatch_update()"
+            """How many actions to perform between minibatch_update() calls.
+            Default value is 1, which performs an update after every action."""
             self.minibatches_per_update = 1
-            "How many minibatch gradients to compute and apply during an update"
+            """How many minibatch gradients to compute and apply during an update.
+            Default value is 1."""
             self.target_update_freq = 1
-            "Actions to take between target network updates"
+            """How many actions to perform between target network updates.
+            (A target network update is when values are copied from the live
+            networks to the delayed networks used to estimate target Q values.)
+            Default value is 1, which performs an update after every action."""
             self.target_update_rate = 0.005
-            "Sometimes called tau, how much to update the target network"
+            r"""Represented by the Greek letter tau (:math:`\tau`) 
+            in target update equations. Used for soft target network updates:
+            
+            .. math:: \theta_{T} = \tau \theta_{L} + (1 - \tau) \theta_{T}
+            """
             self.clip_rewards = False
-            "If true, all rewards are clipped to the interval [-1, 1]"
+            "If true, all rewards are clipped to the interval [-1, 1]."
             self.reward_scale = 1
-            "All rewards are multiplied by this number"
+            """All rewards are multiplied by this number. Default value is 
+            1. 
+            
+            This is intended for compatibility with early SAC examples;
+            new code should use the temperature hyperparamter, whose
+            effect is similar (but with inverse values)."""
             self.gamma = 0.99
-            "Discount factor for Q-values"
+            r"""Discount factor for Q-values in the temporal difference equation:
+            
+            .. math:: Q(s_t, a_t) = E_{s_{t+1}}[r_t + \gamma * \max_{a_{t+1}} Q(s_{t+1},a_{t+1})]"""
             self.temperature = 0.2
             """
             Balances Q-values with entropy (higher favors more entropy).
@@ -113,7 +136,8 @@ class ContinuousSAC(OffPolicyAgent):
             hyperparameter is ignored.
             """
             self.hidden_size = 256
-            "Width of hidden layers"
+            """Width of hidden layers in the default networks. Ignored
+            if custom networks are provided."""
 
     # Network modules and optimizers required by the agent
     class Modules(nn.Module):
