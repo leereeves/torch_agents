@@ -28,7 +28,7 @@ class ContinuousSAC(OffPolicyAgent):
     This version of SAC supports continuous actions. See SACDiscrete
     for a version of SAC that supports discrete actions.
 
-    # Implementation details
+    **Implementation details**
 
     Version 2 of the SAC paper added twin delayed (target) critic 
     networks inspired by TD3, which this implementation includes.
@@ -40,7 +40,7 @@ class ContinuousSAC(OffPolicyAgent):
     that create policies with any distribution that has differentiable
     action samples (e.g. via reparameterization).
 
-    # References
+    **References**
 
     Haarnoja, Tuomas, et al. "Soft actor-critic: Off-policy maximum entropy 
     deep reinforcement learning with a stochastic actor." International 
@@ -53,13 +53,12 @@ class ContinuousSAC(OffPolicyAgent):
 
     https://arxiv.org/pdf/1812.05905.pdf
 
-    # Hyperparameters and training status are organized in several subclasses:
+    **Hyperparameters and other members are organized in several subclasses:**
 
     Attributes:
         hp (Hyperparams): Initial values or schedules for hyperparameters
         current (Hyperparams): Current values of hyperparameters
         status (Status): Current values of public status variables
-        internals: Undocumented internal variables, subject to change.
         modules (Modules): Modules and optimizers
     """
 
@@ -236,8 +235,8 @@ class ContinuousSAC(OffPolicyAgent):
         self._update_hyperparams()
 
         self.status = ContinuousSAC.Status()
-        self.internals = types.SimpleNamespace()
-        self.internals.action_space = env.env.action_space
+        self._internals = types.SimpleNamespace()
+        self._internals.action_space = env.env.action_space
 
         self.memory = memory.ReplayMemory(self.current.memory_size)
 
@@ -272,13 +271,13 @@ class ContinuousSAC(OffPolicyAgent):
 
         # Optimizer required to automatically adjust temperature
         if self.current.target_entropy is not None:
-            self.internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
-            modules.entropy_optimizer = optim.Adam([self.internals.log_temperature], lr=self.current.temperature_lr)
+            self._internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
+            modules.entropy_optimizer = optim.Adam([self._internals.log_temperature], lr=self.current.temperature_lr)
             self.hp.temperature = 0
         self.modules = modules
 
-    def train():
-        super.train()
+    def train(self):
+        super().train()
 
     def _update_learning_rates(self):
         self._update_lr(self.modules.actor_optimizer, self.current.actor_lr)
@@ -311,7 +310,7 @@ class ContinuousSAC(OffPolicyAgent):
         """
         # Use tuned temperature if we're doing that
         if self.current.target_entropy is not None:
-            self.current.temperature = self.internals.log_temperature.exp().item()
+            self.current.temperature = self._internals.log_temperature.exp().item()
 
         with torch.no_grad():
             # We compute an unbiased estimate of the Q values of the next 
@@ -371,7 +370,7 @@ class ContinuousSAC(OffPolicyAgent):
             # Optimize a Monte Carlo estimate of the loss function
             # from equation 18 in reference 2:
             # J(\alpha) = E_{a_t \tilde \pi_t} [-\alpha \log \pi_t(a_t | s_t) - \alpha \bar H]
-            alpha = self.internals.log_temperature.exp()
+            alpha = self._internals.log_temperature.exp()
             temp_loss = (alpha * (-log_p - self.current.target_entropy)).mean()
 
             self.modules.entropy_optimizer.zero_grad()
@@ -391,11 +390,11 @@ class ContinuousSAC(OffPolicyAgent):
         """
         if self.status.action_count < self.current.warmup_actions:
             # Sample random numbers in uniform(0, 1) with shape to match the action_space
-            d = np.array(self.internals.action_space.shape).prod()
+            d = np.array(self._internals.action_space.shape).prod()
             r = np.random.rand(d)
             # Rescale and offset 
-            scale = self.internals.action_space.high - self.internals.action_space.low
-            action = r * scale + self.internals.action_space.low
+            scale = self._internals.action_space.high - self._internals.action_space.low
+            action = r * scale + self._internals.action_space.low
             self.status.entropy = np.log(scale).sum()
         else:
             # Ask the actor to choose the action
