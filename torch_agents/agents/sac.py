@@ -171,8 +171,10 @@ class ContinuousSAC(OffPolicyAgent):
             and recentered to match the environments action_range.
             """
             self.critic1 = None
+            "First critic network"
             self.critic2 = None
-            """
+            """Second critic network
+            
             The critics are network objects derived from torch.nn.Module that include
             a forward function with the following signature:
             
