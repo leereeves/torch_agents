@@ -134,6 +134,9 @@ class ContinuousSAC(OffPolicyAgent):
             average entropy toward target_entropy, and the temperature
             hyperparameter is ignored.
             """
+            self.hidden_depth = 2
+            """Number of hidden layers in the default networks. Ignored
+            if custom networks are provided."""
             self.hidden_size = 256
             """Width of hidden layers in the default networks. Ignored
             if custom networks are provided."""
@@ -174,7 +177,7 @@ class ContinuousSAC(OffPolicyAgent):
             "First critic network"
             self.critic2 = None
             """Second critic network
-            
+
             The critics are network objects derived from torch.nn.Module that include
             a forward function with the following signature:
             
@@ -251,12 +254,12 @@ class ContinuousSAC(OffPolicyAgent):
             action_size = np.array(env.env.action_space.shape).prod()
             lows = env.env.action_space.low
             highs = env.env.action_space.high
-            h = int(self.current.hidden_size)
-            mlp = networks.SplitMLP([state_size, h, h, action_size], splits=2)
+            hiddens = [int(self.current.hidden_size)] * int(self.current.hidden_depth)
+            mlp = networks.SplitMLP([state_size] + hiddens + [action_size], splits=2)
             gaussian = networks.NormalActorFromMeanAndStd(mlp)
             modules.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
-            modules.critic1 = networks.QMLP(state_size, action_size, [h, h])
-            modules.critic2 = networks.QMLP(state_size, action_size, [h, h])
+            modules.critic1 = networks.QMLP(state_size, action_size, hiddens)
+            modules.critic2 = networks.QMLP(state_size, action_size, hiddens)
 
         modules.critic1_target = deepcopy(modules.critic1)
         modules.critic2_target = deepcopy(modules.critic2)
