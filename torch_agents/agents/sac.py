@@ -251,20 +251,31 @@ class SAC(OffPolicyAgent):
 
         self.status.use_discrete_actions = isinstance(action_space, gym.spaces.Discrete)
 
-        if modules is None and not self.status.use_discrete_actions:
-            # Initialize networks for continuous actions
-            modules = SAC.Modules()
-            state_size = np.array(env.env.observation_space.shape).prod()
-            action_size = np.array(action_space.shape).prod()
-            lows = env.env.action_space.low
-            highs = env.env.action_space.high
-            hiddens = [int(self.current.hidden_size)] * int(self.current.hidden_depth)
-            mlp = networks.SplitMLP([state_size] + hiddens + [action_size], splits=2)
-            gaussian = networks.NormalActorFromMeanAndStd(mlp)
-            modules.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
-            modules.critic1 = networks.QMLP(state_size, action_size, hiddens)
-            modules.critic2 = networks.QMLP(state_size, action_size, hiddens)
+        state_size = np.array(env.env.observation_space.shape).prod()
+        action_size = np.array(action_space.shape).prod()
+        lows = env.env.action_space.low
+        highs = env.env.action_space.high
+        hiddens = [int(self.current.hidden_size)] * int(self.current.hidden_depth)
 
+        # Create default networks if custom networks weren't provided
+        if modules is None:
+            modules = SAC.Modules()
+
+        if self.status.use_discrete_actions:
+            # Create networks for discrete actions
+            pass
+        else:
+            # Create networks for continuous actions
+            if modules.actor is None:
+                mlp = networks.SplitMLP([state_size] + hiddens + [action_size], splits=2)
+                gaussian = networks.NormalActorFromMeanAndStd(mlp)
+                modules.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
+            if modules.critic1 is None:
+                modules.critic1 = networks.QMLP(state_size, action_size, hiddens)
+            if modules.critic2 is None:
+                modules.critic2 = networks.QMLP(state_size, action_size, hiddens)
+
+        # Create target networks
         modules.critic1_target = deepcopy(modules.critic1)
         modules.critic2_target = deepcopy(modules.critic2)
 
