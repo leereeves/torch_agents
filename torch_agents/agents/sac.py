@@ -1,4 +1,5 @@
 import datetime
+import gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -15,18 +16,15 @@ from ..environments import EnvInterface
 from .agent import *
 
 ################################################################################
-# Soft Actor Critic (SAC) Agent for environments with continuous action spaces
+# Soft Actor Critic (SAC) Agent 
 
-class ContinuousSAC(OffPolicyAgent):
+class SAC(OffPolicyAgent):
     """Implements Soft Actor Critic (Haarnoja, Tuomas, et al, 2018).
 
     Soft Actor Critic (SAC) is a model-free, off-policy, policy gradient 
     algorithm that maximizes a combination of Q-values plus entropy 
     in the policy distribution. The balance between expected returns
     and entropy is controlled by a temperature hyperparameter.
-
-    This version of SAC supports continuous actions. See SACDiscrete
-    for a version of SAC that supports discrete actions.
 
     **Implementation details**
 
@@ -223,6 +221,8 @@ class ContinuousSAC(OffPolicyAgent):
             "Elapsed time since the start of training"
             self.entropy = 0
             "Average entropy in the most recent minibatch of policy distributions pi(s_t)"
+            self.use_discrete_actions = None
+            "True if the environment has discrete actions, False if continuous."
 
     #######################################################
     # The agent itself begins here
@@ -239,19 +239,23 @@ class ContinuousSAC(OffPolicyAgent):
         self.current = deepcopy(hp)
         self._update_hyperparams()
 
-        self.status = ContinuousSAC.Status()
+        self.status = SAC.Status()
         self._internals = types.SimpleNamespace()
         self._internals.action_space = env.env.action_space
 
         self.memory = memory.ReplayMemory(self.current.memory_size)
 
+        action_space = env.env.action_space
         state_size = np.array(env.env.observation_space.shape).prod()
-        action_size = np.array(env.env.action_space.shape).prod()
+        action_size = np.array(action_space.shape).prod()
 
-        if modules is None:
-            modules = ContinuousSAC.Modules()
+        self.status.use_discrete_actions = isinstance(action_space, gym.spaces.Discrete)
+
+        if modules is None and not self.status.use_discrete_actions:
+            # Initialize networks for continuous actions
+            modules = SAC.Modules()
             state_size = np.array(env.env.observation_space.shape).prod()
-            action_size = np.array(env.env.action_space.shape).prod()
+            action_size = np.array(action_space.shape).prod()
             lows = env.env.action_space.low
             highs = env.env.action_space.high
             hiddens = [int(self.current.hidden_size)] * int(self.current.hidden_depth)
@@ -264,6 +268,7 @@ class ContinuousSAC(OffPolicyAgent):
         modules.critic1_target = deepcopy(modules.critic1)
         modules.critic2_target = deepcopy(modules.critic2)
 
+        # Move networks to the appropriate device
         modules.actor = modules.actor.to(self.device)
         modules.critic1 = modules.critic1.to(self.device)
         modules.critic2 = modules.critic2.to(self.device)
@@ -298,6 +303,12 @@ class ContinuousSAC(OffPolicyAgent):
         self._update_target(self.modules.critic2, self.modules.critic2_target)
 
     def _minibatch_update(self, states, actions, next_states, rewards, dones):
+        if self.status.use_discrete_actions:
+            pass
+        else:
+            self._minibatch_update_continuous(states, actions, next_states, rewards, dones)
+
+    def _minibatch_update_continuous(self, states, actions, next_states, rewards, dones):
         """
         Update live networks by gradient descent, called automatically by train()
 
