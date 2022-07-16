@@ -235,45 +235,50 @@ class SAC(OffPolicyAgent):
             device: A torch.device, a string or int, or None to autodetect.
         """
         super().__init__(device, env)
+
+        # Create hp and current members to organize hyperparameters
         self.hp = deepcopy(hp)
         self.current = deepcopy(hp)
-        self._update_hyperparams()
+        self._update_hyperparams() # to set initial values of scheduled hyperparams
 
+        # Create replay memory
+        self.memory = memory.ReplayMemory(self.current.memory_size)
+
+        # Create Status object to organize public status variables
         self.status = SAC.Status()
+
+        # Create _internals namespace to organize private variables
         self._internals = types.SimpleNamespace()
         self._internals.action_space = env.env.action_space
 
-        self.memory = memory.ReplayMemory(self.current.memory_size)
-
+        # Set temporary variables used to create default networks
         action_space = env.env.action_space
         state_size = np.array(env.env.observation_space.shape).prod()
         action_size = np.array(action_space.shape).prod()
+        lows = action_space.low
+        highs = action_space.high
+        hidden_layers = [int(self.current.hidden_size)] * int(self.current.hidden_depth)
 
+        # And one variable that is public:
         self.status.use_discrete_actions = isinstance(action_space, gym.spaces.Discrete)
-
-        state_size = np.array(env.env.observation_space.shape).prod()
-        action_size = np.array(action_space.shape).prod()
-        lows = env.env.action_space.low
-        highs = env.env.action_space.high
-        hiddens = [int(self.current.hidden_size)] * int(self.current.hidden_depth)
 
         # Create default networks if custom networks weren't provided
         if modules is None:
             modules = SAC.Modules()
 
         if self.status.use_discrete_actions:
-            # Create networks for discrete actions
+            # Create default networks for discrete actions
             pass
         else:
-            # Create networks for continuous actions
+            # Create default networks for continuous actions
             if modules.actor is None:
-                mlp = networks.SplitMLP([state_size] + hiddens + [action_size], splits=2)
+                mlp = networks.SplitMLP([state_size] + hidden_layers + [action_size], output_splits=2)
                 gaussian = networks.NormalActorFromMeanAndStd(mlp)
                 modules.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
             if modules.critic1 is None:
-                modules.critic1 = networks.QMLP(state_size, action_size, hiddens)
+                modules.critic1 = networks.QMLP(state_size, action_size, hidden_layers)
             if modules.critic2 is None:
-                modules.critic2 = networks.QMLP(state_size, action_size, hiddens)
+                modules.critic2 = networks.QMLP(state_size, action_size, hidden_layers)
 
         # Create target networks
         modules.critic1_target = deepcopy(modules.critic1)
@@ -286,15 +291,18 @@ class SAC(OffPolicyAgent):
         modules.critic1_target = modules.critic1_target.to(self.device)
         modules.critic2_target = modules.critic2_target.to(self.device)
 
+        # Create optimizers
         critic_params = list(modules.critic1.parameters()) + list(modules.critic2.parameters())
         modules.critic_optimizer = optim.Adam(critic_params, lr=self.current.critic_lr)
         modules.actor_optimizer = optim.Adam(list(modules.actor.parameters()), lr=self.current.actor_lr)
 
-        # Optimizer required to automatically adjust temperature
+        # Create optimizer required to automatically tune temperature
         if self.current.target_entropy is not None:
             self._internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
             modules.entropy_optimizer = optim.Adam([self._internals.log_temperature], lr=self.current.temperature_lr)
             self.hp.temperature = 0
+
+        # Save modules in self
         self.modules = modules
 
     def train(self):
@@ -315,7 +323,7 @@ class SAC(OffPolicyAgent):
 
     def _minibatch_update(self, states, actions, next_states, rewards, dones):
         if self.status.use_discrete_actions:
-            pass
+            self._minibatch_update_discrete(states, actions, next_states, rewards, dones)
         else:
             self._minibatch_update_continuous(states, actions, next_states, rewards, dones)
 

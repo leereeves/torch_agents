@@ -34,11 +34,11 @@ class QMLP(torch.nn.Module):
 
 # An MLP that splits before the last layer and has multiple output layers
 class SplitMLP(torch.nn.Module):
-    def __init__(self, layer_sizes, splits, activation=nn.ReLU):
+    def __init__(self, layer_sizes, output_splits, activation=nn.ReLU):
         super().__init__()
         output_size = layer_sizes.pop(-1)
         self.mlp = MLP(layer_sizes, activation)
-        self.outputs = nn.ModuleList([torch.nn.Linear(layer_sizes[-1], output_size) for _ in range(splits)])
+        self.outputs = nn.ModuleList([torch.nn.Linear(layer_sizes[-1], output_size) for _ in range(output_splits)])
         self.f = activation()
 
     def forward(self, x):
