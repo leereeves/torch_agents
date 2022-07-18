@@ -60,15 +60,14 @@ class SAC(OffPolicyAgent):
         modules (Modules): Modules and optimizers
     """
 
-    class Hyperparams(object):
+    class Hyperparams(OffPolicyAgent.Hyperparams):
         """
         Hyperparameters to configure an SAC agent. These may be ints, floats, or 
         schedules derived from class Schedule, allowing any hyperparameter
         to change dynamically during training.
         """
         def __init__(self):
-            self.max_actions = 1000
-            """How many actions to take during training, unless stopped early"""
+            super().__init__()
             self.actor_lr = 3e-4
             """Learning rate for the actor optimizer. This can be used both to 
             initialize the default optimizer and to provide adaptive learning 
@@ -84,29 +83,6 @@ class SAC(OffPolicyAgent):
             is 3e-4."""
             self.memory_size = 1e6
             "Size of the replay buffer. Default value is 1e6."
-            self.minibatch_size = 256
-            "Number of transitions in each minibatch. Default value is 256."
-            self.warmup_actions = 0
-            "Random actions to take before training the networks. Default is zero."
-            self.update_freq = 1
-            """How many actions to perform between minibatch_update() calls.
-            Default value is 1, which performs an update after every action."""
-            self.minibatches_per_update = 1
-            """How many minibatch gradients to compute and apply during an update.
-            Default value is 1."""
-            self.target_update_freq = 1
-            """How many actions to perform between target network updates.
-            (A target network update is when values are copied from the live
-            networks to the delayed networks used to estimate target Q values.)
-            Default value is 1, which performs an update after every action."""
-            self.target_update_rate = 0.005
-            r"""Represented by the Greek letter tau (:math:`\tau`) 
-            in target update equations. Used for soft target network updates:
-            
-            .. math:: \theta_{T} = \tau \theta_{L} + (1 - \tau) \theta_{T}
-            """
-            self.clip_rewards = False
-            "If true, all rewards are clipped to the interval [-1, 1]."
             self.reward_scale = 1
             """All rewards are multiplied by this number. Default value is 
             1. 

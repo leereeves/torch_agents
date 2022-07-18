@@ -41,6 +41,7 @@ torch\_agents.agents.sac module
 
 .. automodule:: torch_agents.agents.sac
    :members:
+   :inherited-members: Module
    :undoc-members:
    :show-inheritance:
 
