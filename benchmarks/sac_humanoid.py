@@ -13,13 +13,13 @@ if __name__=="__main__":
 
     hp = SAC.Hyperparams()
     hp.max_actions=1e7
-    hp.warmup_actions = 2e5
+    hp.warmup_actions = 1e4
 
     hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
     hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
 
     hp.reward_scale = 20
-    hp.temperature = 1 # schedule.Linear(hp.max_actions, 1, 0).asfloat()
+    hp.temperature = 1
 
     agent = SAC(env, hp)
     agent.train()

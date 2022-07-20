@@ -324,8 +324,9 @@ class SAC(OffPolicyAgent):
             self.current.temperature = self._internals.log_temperature.exp().item()
 
         with torch.no_grad():
-            # We compute an unbiased estimate of the Q values of the next 
-            # states by using an action sampled from the current policy:
+            # We compute an unbiased estimate of the values (V_{\bar \psi}(s_{t+1}))
+            # of the next states from the Q networks by using an action 
+            # sampled from the current policy:
             sampled_actions, sampled_actions_log_p, _ = \
                 self.modules.actor(next_states)
 
@@ -335,15 +336,15 @@ class SAC(OffPolicyAgent):
             next_q2 = self.modules.critic2_target(next_states, sampled_actions).squeeze(-1)
             next_q = torch.min(next_q1, next_q2)
 
-            # To compute the soft Q value, which maximizes entropy, we add an unbiased 
+            # To compute the soft Q value, which includes entropy, we add an unbiased 
             # estimate of the entropy, again computed by sampling:
-            next_soft_q = next_q - self.current.temperature * sampled_actions_log_p.sum(-1)
+            next_soft_q = next_q - self.current.temperature * sampled_actions_log_p.mean(-1)
 
             # Then we force the estimated soft Q value of terminal states to be zero:
             next_soft_q_zeroed = next_soft_q * (1 - dones)
 
             # Finally, the target Q value is computed with the Bellman equation:
-            target_q = rewards + self.current.gamma * next_soft_q_zeroed
+            target_q = rewards + (self.current.gamma * next_soft_q_zeroed)
 
         # Compute and minimize the critic loss
         # We train both Q networks to predict the target Q value
