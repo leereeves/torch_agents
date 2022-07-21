@@ -2,6 +2,8 @@ from torch_agents.agents.sac import SAC
 from torch_agents import environments
 from torch_agents import schedule
 
+from pprint import pprint
+
 """
 This benchmark replicates Soft Actor Critic performance 
 on Open AI Gym Ant environment as reported in:
@@ -11,7 +13,8 @@ on Open AI Gym Ant environment as reported in:
     conference on machine learning. PMLR, 2018.
 
 That paper reported results on Ant-V1, but this benchmark uses Ant-V4 because 
-V4 uses current Mujoco libary bindings.
+V4 uses current Mujoco libary bindings. This may cause some
+differences in performance.
 
 The reported average returns are 3500 after 1 million steps 
 and 6000 after 3 million.
@@ -44,7 +47,7 @@ if __name__=="__main__":
     hp.reward_scale = 5
     hp.temperature = 1
 
-    print(vars(hp))
+    pprint(vars(hp))
 
     agent = SAC(env, hp)
     agent.train()
