@@ -39,8 +39,8 @@ if __name__=="__main__":
     hp.max_actions=1000000
     hp.warmup_actions = 10000
 
-    hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
-    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
+    hp.actor_lr = 3e-4
+    hp.critic_lr = 3e-4
 
     hp.reward_scale = 5
     hp.temperature = 1
