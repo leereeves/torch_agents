@@ -88,8 +88,9 @@ class SAC(OffPolicyAgent):
             1. 
             
             This is intended for compatibility with early SAC examples;
-            new code should use the temperature hyperparamter, whose
-            effect is similar (but with inverse values)."""
+            new code should use the temperature hyperparameter, whose
+            effect is similar (roughly, temperature = 1/reward_scale)
+            except that reward_scale also influences critic_lr."""
             self.gamma = 0.99
             r"""Discount factor for Q-values in the temporal difference equation:
             
