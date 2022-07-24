@@ -16,8 +16,6 @@ That paper reported results on Hopper-V1, but this benchmark uses Hopper-V4
 because V4 uses current Mujoco libary bindings. This may cause some
 differences in performance.
 
-The reported average returns are slightly over 3000 after 1 million steps.
-
 The reported hyperparameters are:
     2 hidden layers with 256 units each
     (all) learning rates = 3e-4
@@ -27,6 +25,13 @@ The reported hyperparameters are:
     target update interval = 1
     gradient steps = 1
     reward scale = 5
+
+The reported average returns are slightly over 3000 (3 points per step)
+after 1 million steps.
+
+This implementation achieves 3 points per step, but has a tendency
+to fall over, terminating the episode early. I have not found
+hyperparameters that work well for this task.
 """
 if __name__=="__main__":
 
@@ -39,11 +44,11 @@ if __name__=="__main__":
     hp.max_actions=1000000
     hp.warmup_actions = 10000
 
-    hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 1e-4).asfloat()
-    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 1e-4).asfloat()
+    hp.actor_lr = 3e-4
+    hp.critic_lr = 3e-4
 
     hp.reward_scale = 5
-    hp.temperature = schedule.Linear(hp.max_actions, 1, 0.5).asfloat()
+    hp.temperature = 1
 
     pprint(vars(hp))
 
