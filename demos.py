@@ -30,7 +30,7 @@ def dqn_cartpole_demo():
                 ],
                 repeat=400
             )
-        ]).asfloat(),
+        ]),
         eval_epsilon=0.01,
         min_repeat=1,
         max_repeat=schedule.Sequence(
@@ -40,13 +40,13 @@ def dqn_cartpole_demo():
                 schedule.Flat(2000, 1)
             ],
             repeat=300
-        ).asfloat()
+        )
     )
     lr_schedule = schedule.Linear(1e6, 0.0001, 0.00001)
     target_update_schedule = schedule.Linear(10, 1000, 10000)
     agent = dqn('CartPole', env, net, mem, exp, 
-        lr = lr_schedule.asfloat(), 
-        target_update_freq=target_update_schedule.asfloat(), 
+        lr = lr_schedule, 
+        target_update_freq=target_update_schedule, 
         replay_start_frames=replay_start_frames,
         max_episodes=1e6)
     agent.train()
@@ -65,7 +65,7 @@ def dqn_atari_demo(env_name):
             epsilon=schedule.Sequence([
                 schedule.Flat(50000 // 4, 1.0),
                 schedule.Linear(1e6, 1.0, 0.1),
-            ]).asfloat(),
+            ]),
             eval_epsilon=0.01
             )
     agent = dqn(env_name, env, net, mem, exp, lr = 0.00005,
@@ -92,7 +92,7 @@ def ddpg_demo(env_name, render_mode=None):
     mem = memory.ReplayMemory(1e6)
     noise = explore.GaussianNoise(
             mu=0.0,
-            sigma=schedule.Linear(500000, 0.2, 0).asfloat(),
+            sigma=schedule.Linear(500000, 0.2, 0),
             size=action_size
             )
     agent = ddpg(env_name, env, actor_net, critic_net, mem, noise, 
@@ -125,7 +125,7 @@ def ppo_demo(env_name, render_mode=None):
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
             updates_per_epoch=10,
-            lr = schedule.Linear(max_epochs, 3e-4, 0).asfloat(),
+            lr = schedule.Linear(max_epochs, 3e-4, 0),
             beta = 0,
             gamma = 0.99,
             lambd = 0.95,
@@ -203,7 +203,7 @@ def ppo_cartpole_demo(render_mode=None):
             max_epochs=max_epochs,
             steps_per_epoch=steps_per_epoch,
             updates_per_epoch=4,
-            lr = schedule.Linear(max_epochs, 2.5e-4, 0).asfloat(),
+            lr = schedule.Linear(max_epochs, 2.5e-4, 0),
             gamma = 0.99,
             lambd = 0.95,
             beta = 0.01,
@@ -221,10 +221,10 @@ def sac_demo(env_name, render_mode=None):
 
     hp = SAC.Hyperparams()
     hp.max_actions=1000000
-    hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
-    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0).asfloat()
-    hp.temperature_lr = schedule.Linear(hp.max_actions, 1e-3, 0).asfloat()
-    hp.target_entropy = schedule.Linear(hp.max_actions, 0.2, 0).asfloat()
+    hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0)
+    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0)
+    hp.temperature_lr = schedule.Linear(hp.max_actions, 1e-3, 0)
+    hp.target_entropy = schedule.Linear(hp.max_actions, 0.2, 0)
     hp.warmup_actions = 10000
 
     agent = SAC(env, hp)

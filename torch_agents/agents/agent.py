@@ -3,7 +3,7 @@ import numpy as np
 import time
 import torch
 
-from ..environments import EnvInterface
+import torch_agents as ta
 
 class Agent(object):
     def __init__(self, device, env):
@@ -59,8 +59,8 @@ class OffPolicyAgent(Agent):
 
     ########################################
     # The OffPolicyAgent class starts here 
-    
-    def __init__(self, device, env:EnvInterface):
+
+    def __init__(self, device, env:ta.environments.EnvInterface):
         super().__init__(device, env)
 
     # Convert a Torch tensor to a numpy array,
@@ -80,11 +80,13 @@ class OffPolicyAgent(Agent):
             return torch.tensor(np.asarray(x, dtype=dtype)).to(self.device)
 
     def _update_hyperparams(self):
-        for param, value in vars(self.hp).items():
+        for param_name, value in vars(self.hp).items():
             if value is None:
-                setattr(self.current, param, None)
+                setattr(self.current, param_name, None)
             else:
-                setattr(self.current, param, float(value))
+                setattr(self.current, param_name, float(value))
+                if isinstance(value, ta.schedule.Schedule):
+                    value.advance()
 
     def _update_lr(self, optimizer, lr):
         if lr is not None:
