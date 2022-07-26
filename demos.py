@@ -212,24 +212,6 @@ def ppo_cartpole_demo(render_mode=None):
     )
     return agent.train()
 
-# Demo of Soft Actor Critic
-def sac_demo(env_name, render_mode=None):
-    env = environments.GymEnv(
-            name=env_name, 
-            render_mode=render_mode
-            )
-
-    hp = SAC.Hyperparams()
-    hp.max_actions=1000000
-    hp.actor_lr = schedule.Linear(hp.max_actions, 3e-4, 0)
-    hp.critic_lr = schedule.Linear(hp.max_actions, 3e-4, 0)
-    hp.temperature_lr = schedule.Linear(hp.max_actions, 1e-3, 0)
-    hp.target_entropy = schedule.Linear(hp.max_actions, 0.2, 0)
-    hp.warmup_actions = 10000
-
-    agent = SAC(env, hp)
-    agent.train()
-
 # Main entry point
 if __name__=="__main__":
     if len(sys.argv) < 2:
@@ -278,6 +260,3 @@ if __name__=="__main__":
             #actor_lr=[1e-4, 2e-4, 3e-4],
             #critic_lr=[1e-3, 3e-4]
             )
-
-    if request == 'sac-pendulum':
-        sac_demo("Pendulum-v1")
