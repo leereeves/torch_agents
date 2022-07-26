@@ -11,14 +11,22 @@
 # terminate early if the agent fails (for example, the agent falls down)
 # annealing like this can cause unrecoverable catastrophic forgetting.
 
+import sys
 import torch_agents as ta
 from torch_agents.agents.sac import SAC
 from pprint import pprint
 
 if __name__=="__main__":
+
+    # Run "python sac_pendulum.py human" to watch the game
+    if len(sys.argv) > 1:
+        render_mode = sys.argv[1].casefold()
+    else:
+        render_mode = None
+
     env = ta.environments.GymEnv(
             name="Pendulum-v1", 
-            render_mode=None # change to "Human" to watch
+            render_mode=render_mode
             )
 
     hp = SAC.Hyperparams()
