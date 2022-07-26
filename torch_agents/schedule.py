@@ -32,7 +32,7 @@ class Flat(Schedule):
             self.done = (self.steps <= 0)
 
     def __repr__(self):
-        return "Flat({self.steps:d}, {self.value:g})".format(self=self)
+        return "Flat({self.steps:g}, {self.value:g})".format(self=self)
 
 
 class Linear(Schedule):
@@ -72,9 +72,9 @@ class Linear(Schedule):
 
     def __repr__(self):
         if self.repeat > 1:
-            return "Linear({self.steps:d}, {self.start_value:g}, {self.final_value:g}, {self.repeat:d})".format(self=self)
+            return "Linear({self.steps:g}, {self.start_value:g}, {self.final_value:g}, {self.repeat:g})".format(self=self)
         else:
-            return "Linear({self.steps:d}, {self.start_value:g}, {self.final_value:g})".format(self=self)
+            return "Linear({self.steps:g}, {self.start_value:g}, {self.final_value:g})".format(self=self)
 
 
 class Sequence(Schedule):
@@ -118,6 +118,6 @@ class Sequence(Schedule):
 
     def __repr__(self):
         if self.repeat > 1:
-            return "Sequence({self.contents:}, {self.repeat:d})".format(self=self)
+            return "Sequence({self.contents:}, {self.repeat:g})".format(self=self)
         else:
             return "Sequence({self.contents:})".format(self=self)
