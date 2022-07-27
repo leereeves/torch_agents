@@ -31,12 +31,12 @@ class OffPolicyAgent(Agent):
         to change dynamically during training.
         """
         def __init__(self):
-            self.max_actions = 1000
+            self.max_actions = 1e6
             """How many actions to take during training, unless stopped early"""
             self.minibatch_size = 256
             "Number of transitions in each minibatch. Default value is 256."
-            self.warmup_actions = 0
-            "Random actions to take before training the networks. Default is zero."
+            self.warmup_actions = 10000
+            "Random actions to take before beginning to train the networks."
             self.update_freq = 1
             """How many actions to perform between minibatch_update() calls.
             Default value is 1, which performs an update after every action."""

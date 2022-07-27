@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import types
+from pprint import pprint
 
 from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter 
@@ -203,7 +204,7 @@ class SAC(OffPolicyAgent):
 
     #######################################################
     # The agent itself begins here
-    def __init__(self, env:EnvInterface, hp:Hyperparams, modules:Modules=None, device=None):
+    def __init__(self, env:EnvInterface, hp:Hyperparams=None, modules:Modules=None, device=None):
         """Initialize the agent.
 
         Args:
@@ -214,6 +215,11 @@ class SAC(OffPolicyAgent):
         super().__init__(device, env)
 
         # Create hp and current members to organize hyperparameters
+        if hp is None:
+            hp = SAC.Hyperparams()
+            print("Using the default hyperparameters:")
+            pprint(vars(hp))
+
         self.hp = deepcopy(hp)
         self.current = deepcopy(hp)
         self._update_hyperparams() # to set initial values of scheduled hyperparams
