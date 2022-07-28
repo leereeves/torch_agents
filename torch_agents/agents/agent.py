@@ -1,16 +1,34 @@
 import math
 import numpy as np
+import random
 import time
 import torch
+from copy import deepcopy
 
 import torch_agents as ta
 
 class Agent(object):
-    def __init__(self, device, env):
+    class Hyperparams(object):
+        """
+        Hyperparameters used by all agents. 
+        """
+        def __init__(self):
+            self.seed = None
+            """If None (which is the default) torch-agents will not 
+            initialize any random seeds. If this is not None, 
+            torch-agents initializes the torch, np, and random seeds 
+            and uses the deterministic backend. Please note
+            that the PyTorch authors warn: "Completely reproducible 
+            results are not guaranteed across PyTorch releases, 
+            individual commits, or different platforms. Furthermore, 
+            results may not be reproducible between CPU and GPU 
+            executions, even when using identical seeds." """
+            
+    def __init__(self, device, env, hp:Hyperparams):
         self.env = env
         if device is not None:
             self.device = device
-        else:        
+        else: # if device is None, autodetect CUDA
             if torch.cuda.is_available():
                 print("Training on GPU.")
                 self.device = torch.device('cuda:0')
@@ -18,19 +36,38 @@ class Agent(object):
                 print("No CUDA device found, or CUDA is not installed. Training on CPU.")
                 self.device = torch.device('cpu')
 
+        self.hp = deepcopy(hp)
+        self.current = deepcopy(hp)
+        self._update_hyperparams() # to set initial values of scheduled hyperparams
+
+        if hp.seed is not None:
+            self.set_seed(hp.seed)
+
+    def set_seed(self, seed):
+        print(f"Setting seed {seed:g}")
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        self.env.seed(seed)
+
     def train(self):
         "Train the agent."
         pass
 
 
 class OffPolicyAgent(Agent):
-    class Hyperparams(object):
+    class Hyperparams(Agent.Hyperparams):
         """
         Hyperparameters to configure an SAC agent. These may be ints, floats, or 
         schedules derived from class Schedule, allowing any hyperparameter
         to change dynamically during training.
         """
         def __init__(self):
+            super().__init__()
             self.max_actions = 1e6
             """How many actions to take during training, unless stopped early"""
             self.minibatch_size = 256
@@ -60,8 +97,8 @@ class OffPolicyAgent(Agent):
     ########################################
     # The OffPolicyAgent class starts here 
 
-    def __init__(self, device, env:ta.environments.EnvInterface):
-        super().__init__(device, env)
+    def __init__(self, device, env:ta.environments.EnvInterface, hp:Hyperparams):
+        super().__init__(device, env, hp)
 
     # Convert a Torch tensor to a numpy array,
     # And if that tensor is on the GPU, move to CPU

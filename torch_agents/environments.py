@@ -33,6 +33,9 @@ class GymEnv(EnvInterface):
         else:
             self.env = gym.make(name, frameskip=frameskip)
 
+    def seed(self, seed):
+        return self.env.seed(seed)
+
     def action_space_size(self):
         return len(self.actions)
 

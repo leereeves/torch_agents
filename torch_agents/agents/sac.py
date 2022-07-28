@@ -212,7 +212,6 @@ class SAC(OffPolicyAgent):
             hp (Hyperparams): Initial values or schedules for hyperparameters
             device: A torch.device, a string or int, or None to autodetect.
         """
-        super().__init__(device, env)
 
         # Create hp and current members to organize hyperparameters
         if hp is None:
@@ -220,9 +219,7 @@ class SAC(OffPolicyAgent):
             print("Using the default hyperparameters:")
             pprint(vars(hp))
 
-        self.hp = deepcopy(hp)
-        self.current = deepcopy(hp)
-        self._update_hyperparams() # to set initial values of scheduled hyperparams
+        super().__init__(device, env, hp)
 
         # Create replay memory
         self.memory = memory.ReplayMemory(self.current.memory_size)

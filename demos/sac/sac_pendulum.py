@@ -37,6 +37,8 @@ if __name__=="__main__":
     hp.temperature_lr = ta.schedule.Linear(hp.max_actions, 1e-3, 0)
     hp.target_entropy = ta.schedule.Linear(hp.max_actions, 0.2, 0)
 
+    hp.seed = 1
+    
     pprint(vars(hp))
 
     agent = SAC(env, hp)
