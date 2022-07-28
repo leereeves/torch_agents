@@ -17,12 +17,23 @@ class Agent(object):
             """If None (which is the default) torch-agents will not 
             initialize any random seeds. If this is not None, 
             torch-agents initializes the torch, np, and random seeds 
-            and uses the deterministic backend. Please note
-            that the PyTorch authors warn: "Completely reproducible 
-            results are not guaranteed across PyTorch releases, 
-            individual commits, or different platforms. Furthermore, 
-            results may not be reproducible between CPU and GPU 
-            executions, even when using identical seeds." """
+            and uses the deterministic cuDNN backend. 
+            
+            .. note::
+                The PyTorch authors warn: "Completely reproducible 
+                results are not guaranteed across PyTorch releases, 
+                individual commits, or different platforms. Furthermore, 
+                results may not be reproducible between CPU and GPU 
+                executions, even when using identical seeds." 
+                
+                "Also, deterministic operations are often slower than 
+                nondeterministic operations, so single-run performance 
+                may decrease for your model. However, determinism may 
+                save time in development by facilitating experimentation, 
+                debugging, and regression testing."
+
+                https://pytorch.org/docs/stable/notes/randomness.html
+            """
             
     def __init__(self, device, env, hp:Hyperparams):
         self.env = env
