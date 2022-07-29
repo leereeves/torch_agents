@@ -1,15 +1,10 @@
 # Demo of Soft Actor Critic with OpenAI Gym's Pendulum-v1 environment
 #
-# This is a fairly simple environment that SAC can learn in 
-# a few minutes (if not rendering to the screen and therefore
-# not limited by the environment's frame rate).
+# This demonstrates repeatable results when run more than once
+# on the same system using the `seed` hyperparameter.
 #
-# This also demonstrates that annealing learning rate and temperature 
-# (the weight of entropy relative to rewards) down to zero is
-# effective and results in a precise solution for this environment. 
-# In some more complex environments, especially environments that
-# terminate early if the agent fails (for example, the agent falls down)
-# annealing like this can cause unrecoverable catastrophic forgetting.
+# However, the results probably still may not be identical when
+# run on different systems.
 
 import sys
 import torch_agents as ta
@@ -37,6 +32,8 @@ if __name__=="__main__":
     hp.temperature_lr = ta.schedule.Linear(hp.max_actions, 1e-3, 0)
     hp.target_entropy = ta.schedule.Linear(hp.max_actions, 0.2, 0)
 
+    hp.seed = 1
+    
     pprint(vars(hp))
 
     agent = SAC(env, hp)
