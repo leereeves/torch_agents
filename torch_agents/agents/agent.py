@@ -10,7 +10,9 @@ import torch_agents as ta
 class Agent(object):
     class Hyperparams(object):
         """
-        Hyperparameters used by all agents. 
+        Hyperparameters used by all agents. Unless otherwise noted,
+        these may be ints, floats, or schedules derived from class Schedule, 
+        allowing any hyperparameter to change dynamically during training.
         """
         def __init__(self):
             self.seed = None
@@ -34,7 +36,36 @@ class Agent(object):
 
                 https://pytorch.org/docs/stable/notes/randomness.html
             """
-            
+            self.checkpoint_name = None
+            """
+            The name of checkpoint files. This can be a formatted string
+            that includes hyperparameters (self.current) and status 
+            variables (self.status).
+            """
+            self.checkpoint_freq = None
+            """
+            Minimum number of actions between checkpoints. The actual 
+            number may be higher because checkpoints are always
+            saved at the end of an episode.
+            """
+    class Status(object):
+        def __init__(self):
+            super().__init__()
+            self.action_count = 0
+            "How many actions the agent has taken"
+            self.update_count = 0
+            "How many updates the agent has performed"
+            self.minibatch_count = 0
+            "How many minibatch gradients the agent has applied"
+            self.episode_count = 0
+            "How many episodes the agent has completed"
+            self.score_history = []
+            "All scores from completed episodes in chronological order"
+            self.elapsed_time = 0
+            "Elapsed time since the start of training"
+            self.use_discrete_actions = None
+            "True if the environment has discrete actions, False if continuous."
+
     def __init__(self, device, env, hp:Hyperparams):
         self.env = env
         if device is not None:
@@ -73,9 +104,9 @@ class Agent(object):
 class OffPolicyAgent(Agent):
     class Hyperparams(Agent.Hyperparams):
         """
-        Hyperparameters to configure an SAC agent. These may be ints, floats, or 
-        schedules derived from class Schedule, allowing any hyperparameter
-        to change dynamically during training.
+        Hyperparameters to configure an OffPolicyAgent. Unless otherwise noted,
+        these may be ints, floats, or schedules derived from class Schedule, 
+        allowing any hyperparameter to change dynamically during training.
         """
         def __init__(self):
             super().__init__()
@@ -104,6 +135,13 @@ class OffPolicyAgent(Agent):
             """
             self.clip_rewards = False
             "If true, all rewards are clipped to the interval [-1, 1]."
+
+
+    class Status(Agent.Status):
+        def __init__(self):
+            super().__init__()
+            # at this time, there are no attributes unique to OffPolicyAgents
+
 
     ########################################
     # The OffPolicyAgent class starts here 

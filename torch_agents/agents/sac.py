@@ -183,24 +183,11 @@ class SAC(OffPolicyAgent):
             """
 
     # Current status of the agent, updated every step
-    class Status(object):
+    class Status(OffPolicyAgent.Status):
         def __init__(self):
-            self.action_count = 0
-            "How many actions the agent has taken"
-            self.update_count = 0
-            "How many updates the agent has performed"
-            self.minibatch_count = 0
-            "How many minibatch gradients the agent has applied"
-            self.episode_count = 0
-            "How many episodes the agent has completed"
-            self.score_history = []
-            "All scores from completed episodes in chronological order"
-            self.elapsed_time = 0
-            "Elapsed time since the start of training"
+            super().__init__()
             self.entropy = 0
             "Average entropy in the most recent minibatch of policy distributions pi(s_t)"
-            self.use_discrete_actions = None
-            "True if the environment has discrete actions, False if continuous."
 
     #######################################################
     # The agent itself begins here
@@ -376,7 +363,7 @@ class SAC(OffPolicyAgent):
         actor_loss.backward()
         self.modules.actor_optimizer.step()
 
-        self.status.entropy = actor_entropy.mean()
+        self.status.entropy = actor_entropy.mean().item()
 
         # Automatically adjust temperature, see reference 2
         if self.current.target_entropy is not None:

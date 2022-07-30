@@ -38,3 +38,5 @@ if __name__=="__main__":
 
     agent = SAC(env, hp)
     agent.train()
+
+    pprint(vars(agent.status))
