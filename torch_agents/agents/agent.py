@@ -65,6 +65,8 @@ class Agent(object):
             "Elapsed time since the start of training"
             self.use_discrete_actions = None
             "True if the environment has discrete actions, False if continuous."
+            self.last_checkpoint_ac = 0
+            "Action count when the most recent checkpoint was saved."
 
     def __init__(self, device, env, hp:Hyperparams):
         self.env = env
@@ -83,9 +85,13 @@ class Agent(object):
         self._update_hyperparams() # to set initial values of scheduled hyperparams
 
         if hp.seed is not None:
-            self.set_seed(hp.seed)
+            self._set_seed(hp.seed)
 
-    def set_seed(self, seed):
+    def train(self):
+        "Train the agent."
+        pass
+
+    def _set_seed(self, seed):
         print(f"Setting seed {seed:g}")
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
@@ -96,9 +102,8 @@ class Agent(object):
         random.seed(seed)
         self.env.seed(seed)
 
-    def train(self):
-        "Train the agent."
-        pass
+    def _save_checkpoint(self):
+        raise NotImplementedError
 
 
 class OffPolicyAgent(Agent):
@@ -169,6 +174,8 @@ class OffPolicyAgent(Agent):
         for param_name, value in vars(self.hp).items():
             if value is None:
                 setattr(self.current, param_name, None)
+            elif isinstance(value, str):
+                setattr(self.current, param_name, value)
             else:
                 setattr(self.current, param_name, float(value))
                 if isinstance(value, ta.schedule.Schedule):
@@ -242,14 +249,11 @@ class OffPolicyAgent(Agent):
 
         start = time.time()
 
-        self.status.score_history = []
-        self.status.episode_count = 0
-
         state = self.env.reset()
         score = 0
         done = 0
         # This loops through actions (4 frames for Atari, 1 frame for most envs)
-        for self.status.action_count in range(int(self.current.max_actions)):
+        while self.status.action_count < self.current.max_actions:
             state_tensor = self._to_tensor(state)
             action = self._to_numpy(self._choose_action(state_tensor))
             new_state, reward, done, info, life_lost = self.env.step(action)
@@ -276,6 +280,15 @@ class OffPolicyAgent(Agent):
 
                 self.on_episode_end()
 
+                if self.current.checkpoint_name is not None and \
+                    self.current.checkpoint_freq is not None and \
+                    self.status.action_count >= \
+                    self.status.last_checkpoint_ac + self.current.checkpoint_freq:
+
+                    # save checkpoint
+                    self.status.last_checkpoint_ac = self.status.action_count
+                    self._save_checkpoint()
+
                 # Reset for the start of a new episode
                 state = self.env.reset()
                 score = 0
@@ -287,7 +300,12 @@ class OffPolicyAgent(Agent):
             #    self.save_model()
 
             self._update_hyperparams()
-        # end for self.status.action_count in range(int(self.current.max_actions)):
+
+        # end while self.status.action_count < self.current.max_actions:
+
+        # Save final checkpoint
+        self.status.last_checkpoint_ac = self.status.action_count
+        self._save_checkpoint()
 
         self.env.close()
         #tb_log.close()

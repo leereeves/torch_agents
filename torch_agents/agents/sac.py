@@ -1,6 +1,8 @@
 import datetime
 import gym
 import numpy as np
+import os.path
+import pathlib
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -191,7 +193,12 @@ class SAC(OffPolicyAgent):
 
     #######################################################
     # The agent itself begins here
-    def __init__(self, env:EnvInterface, hp:Hyperparams=None, modules:Modules=None, device=None):
+    def __init__(self, 
+                    env:EnvInterface, 
+                    hp:Hyperparams=None, 
+                    modules:Modules=None, 
+                    device=None,
+                    checkpoint=None):
         """Initialize the agent.
 
         Args:
@@ -201,7 +208,9 @@ class SAC(OffPolicyAgent):
         """
 
         # Create hp and current members to organize hyperparameters
-        if hp is None:
+        if checkpoint is not None:
+            hp = self._load_checkpoint_first_pass(checkpoint)
+        elif hp is None:
             hp = SAC.Hyperparams()
             print("Using the default hyperparameters:")
             pprint(vars(hp))
@@ -271,6 +280,9 @@ class SAC(OffPolicyAgent):
 
         # Save modules in self
         self.modules = modules
+
+        if checkpoint is not None:
+            self._load_checkpoint_second_pass(checkpoint)
 
     def train(self):
         super().train()
@@ -404,6 +416,32 @@ class SAC(OffPolicyAgent):
             with torch.no_grad():
                 action, _, _ = self.modules.actor(state)
         return action
+
+
+    def _save_checkpoint(self):
+        filename = self.current.checkpoint_name.format(self=self)
+        print("Saving " + filename)
+        folder = os.path.dirname(filename)
+        pathlib.Path(folder).mkdir(parents=True, exist_ok=True) 
+        torch.save({
+            'hp': self.hp,
+            'current': self.current,
+            'status': self.status,
+            'model_state_dict': self.modules.state_dict(),
+        }, filename)
+
+    def _load_checkpoint_first_pass(self, checkpoint):
+        # First pass, load the hyperparams to properly initialize the agent
+        data = torch.load(checkpoint)
+        return data['hp']
+
+    def _load_checkpoint_second_pass(self, checkpoint):
+        # Second pass, load the checkpoint state
+        data = torch.load(checkpoint)
+        self.hp = data['hp']
+        self.current = data['current']
+        self.status = data['status']
+        self.modules.load_state_dict(data['model_state_dict'])
 
     def on_episode_end(self):
         """
