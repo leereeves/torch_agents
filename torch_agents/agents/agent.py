@@ -46,7 +46,9 @@ class Agent(object):
             """
             Minimum number of actions between checkpoints. The actual 
             number may be higher because checkpoints are always
-            saved at the end of an episode.
+            saved at the end of an episode. If checkpoint_name is not 
+            None and checkpoint_freq is None, only one checkpoint
+            will be saved, when training is finished.
             """
     class Status(object):
         def __init__(self):
@@ -303,9 +305,11 @@ class OffPolicyAgent(Agent):
 
         # end while self.status.action_count < self.current.max_actions:
 
-        # Save final checkpoint
-        self.status.last_checkpoint_ac = self.status.action_count
-        self._save_checkpoint()
+        # Save final checkpoint. This is saved even if checkpoint_freq
+        # is None, if checkpoint_name is not None.
+        if self.current.checkpoint_name is not None:
+            self.status.last_checkpoint_ac = self.status.action_count
+            self._save_checkpoint()
 
         self.env.close()
         #tb_log.close()
