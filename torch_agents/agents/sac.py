@@ -60,7 +60,7 @@ class SAC(OffPolicyAgent):
         hp (Hyperparams): Initial values or schedules for hyperparameters
         current (Hyperparams): Current values of hyperparameters
         status (Status): Current values of public status variables
-        modules (Modules): Modules and optimizers
+        model (Model): modules and optimizers
     """
 
     class Hyperparams(OffPolicyAgent.Hyperparams):
@@ -119,8 +119,8 @@ class SAC(OffPolicyAgent):
             """Width of hidden layers in the default networks. Ignored
             if custom networks are provided."""
 
-    # Network modules and optimizers required by the agent
-    class Modules(nn.Module):
+    # Network model and optimizers required by the agent
+    class Model(nn.Module):
         def __init__(self):
             super().__init__()
             self.actor = None
@@ -196,7 +196,7 @@ class SAC(OffPolicyAgent):
     def __init__(self, 
                     env:EnvInterface, 
                     hp:Hyperparams=None, 
-                    modules:Modules=None, 
+                    model:Model=None, 
                     device=None,
                     checkpoint=None):
         """Initialize the agent.
@@ -239,47 +239,47 @@ class SAC(OffPolicyAgent):
         self.status.use_discrete_actions = isinstance(action_space, gym.spaces.Discrete)
 
         # Create default networks if custom networks weren't provided
-        if modules is None:
-            modules = SAC.Modules()
+        if model is None:
+            model = SAC.Model()
 
         if self.status.use_discrete_actions:
             # Create default networks for discrete actions
             pass
         else:
             # Create default networks for continuous actions
-            if modules.actor is None:
+            if model.actor is None:
                 mlp = networks.SplitMLP([state_size] + hidden_layers + [action_size], output_splits=2)
                 gaussian = networks.NormalActorFromMeanAndStd(mlp)
-                modules.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
-            if modules.critic1 is None:
-                modules.critic1 = networks.QMLP(state_size, action_size, hidden_layers)
-            if modules.critic2 is None:
-                modules.critic2 = networks.QMLP(state_size, action_size, hidden_layers)
+                model.actor = networks.BoundActor(gaussian, mins=lows, maxs=highs)
+            if model.critic1 is None:
+                model.critic1 = networks.QMLP(state_size, action_size, hidden_layers)
+            if model.critic2 is None:
+                model.critic2 = networks.QMLP(state_size, action_size, hidden_layers)
 
         # Create target networks
-        modules.critic1_target = deepcopy(modules.critic1)
-        modules.critic2_target = deepcopy(modules.critic2)
+        model.critic1_target = deepcopy(model.critic1)
+        model.critic2_target = deepcopy(model.critic2)
 
         # Move networks to the appropriate device
-        modules.actor = modules.actor.to(self.device)
-        modules.critic1 = modules.critic1.to(self.device)
-        modules.critic2 = modules.critic2.to(self.device)
-        modules.critic1_target = modules.critic1_target.to(self.device)
-        modules.critic2_target = modules.critic2_target.to(self.device)
+        model.actor = model.actor.to(self.device)
+        model.critic1 = model.critic1.to(self.device)
+        model.critic2 = model.critic2.to(self.device)
+        model.critic1_target = model.critic1_target.to(self.device)
+        model.critic2_target = model.critic2_target.to(self.device)
 
         # Create optimizers
-        critic_params = list(modules.critic1.parameters()) + list(modules.critic2.parameters())
-        modules.critic_optimizer = optim.Adam(critic_params, lr=self.current.critic_lr)
-        modules.actor_optimizer = optim.Adam(list(modules.actor.parameters()), lr=self.current.actor_lr)
+        critic_params = list(model.critic1.parameters()) + list(model.critic2.parameters())
+        model.critic_optimizer = optim.Adam(critic_params, lr=self.current.critic_lr)
+        model.actor_optimizer = optim.Adam(list(model.actor.parameters()), lr=self.current.actor_lr)
 
         # Create optimizer required to automatically tune temperature
         if self.current.target_entropy is not None:
             self._internals.log_temperature = nn.Parameter(torch.zeros(1).to(self.device))
-            modules.entropy_optimizer = optim.Adam([self._internals.log_temperature], lr=self.current.temperature_lr)
+            model.entropy_optimizer = optim.Adam([self._internals.log_temperature], lr=self.current.temperature_lr)
             self.hp.temperature = 0
 
-        # Save modules in self
-        self.modules = modules
+        # Save model in self
+        self.model = model
 
         if checkpoint is not None:
             self._load_checkpoint_second_pass(checkpoint)
@@ -288,17 +288,17 @@ class SAC(OffPolicyAgent):
         super().train()
 
     def _update_learning_rates(self):
-        self._update_lr(self.modules.actor_optimizer, self.current.actor_lr)
-        self._update_lr(self.modules.critic_optimizer, self.current.critic_lr)
+        self._update_lr(self.model.actor_optimizer, self.current.actor_lr)
+        self._update_lr(self.model.critic_optimizer, self.current.critic_lr)
         if self.current.target_entropy is not None:
-            self._update_lr(self.modules.entropy_optimizer, self.current.temperature_lr)
+            self._update_lr(self.model.entropy_optimizer, self.current.temperature_lr)
 
     def _update_targets(self):
         """
         Update target networks from live networks, called automatically by train()
         """
-        self._update_target(self.modules.critic1, self.modules.critic1_target)
-        self._update_target(self.modules.critic2, self.modules.critic2_target)
+        self._update_target(self.model.critic1, self.model.critic1_target)
+        self._update_target(self.model.critic2, self.model.critic2_target)
 
     def _minibatch_update(self, states, actions, next_states, rewards, dones):
         if self.status.use_discrete_actions:
@@ -331,12 +331,12 @@ class SAC(OffPolicyAgent):
             # of the next states from the Q networks by using an action 
             # sampled from the current policy:
             sampled_actions, sampled_actions_log_p, _ = \
-                self.modules.actor(next_states)
+                self.model.actor(next_states)
 
             # For stability, we estimate Q values with delayed (target) networks, 
             # and take the minimum of the Q values predicted by two target networks. 
-            next_q1 = self.modules.critic1_target(next_states, sampled_actions).squeeze(-1)
-            next_q2 = self.modules.critic2_target(next_states, sampled_actions).squeeze(-1)
+            next_q1 = self.model.critic1_target(next_states, sampled_actions).squeeze(-1)
+            next_q2 = self.model.critic2_target(next_states, sampled_actions).squeeze(-1)
             next_q = torch.min(next_q1, next_q2)
 
             # To compute the soft Q value, which includes entropy, we add an unbiased 
@@ -351,29 +351,29 @@ class SAC(OffPolicyAgent):
 
         # Compute and minimize the critic loss
         # We train both Q networks to predict the target Q value
-        q1 = self.modules.critic1(states, actions).squeeze(-1)
-        q2 = self.modules.critic2(states, actions).squeeze(-1)
+        q1 = self.model.critic1(states, actions).squeeze(-1)
+        q2 = self.model.critic2(states, actions).squeeze(-1)
         q1_loss = F.mse_loss(q1, target_q)
         q2_loss = F.mse_loss(q2, target_q)
         q_loss = q1_loss + q2_loss
 
-        self.modules.critic_optimizer.zero_grad()
+        self.model.critic_optimizer.zero_grad()
         q_loss.backward()
-        self.modules.critic_optimizer.step()
+        self.model.critic_optimizer.step()
 
         # Compute and minimize the actor loss
         # Here we maximize the soft Q value
         # (which is entropy, E[-log pi], plus the Q value)
         # by minimizing -1 times the soft Q value
-        actions, actions_log_p, actor_entropy = self.modules.actor(states)
-        q1 = self.modules.critic1(states, actions).squeeze(-1)
-        q2 = self.modules.critic2(states, actions).squeeze(-1)
+        actions, actions_log_p, actor_entropy = self.model.actor(states)
+        q1 = self.model.critic1(states, actions).squeeze(-1)
+        q2 = self.model.critic2(states, actions).squeeze(-1)
         min_q = torch.min(q1, q2)
         actor_loss = ((self.current.temperature * actions_log_p.sum(-1)) - min_q).mean()
 
-        self.modules.actor_optimizer.zero_grad()
+        self.model.actor_optimizer.zero_grad()
         actor_loss.backward()
-        self.modules.actor_optimizer.step()
+        self.model.actor_optimizer.step()
 
         self.status.entropy = actor_entropy.mean().item()
 
@@ -381,16 +381,16 @@ class SAC(OffPolicyAgent):
         if self.current.target_entropy is not None:
             # Recompute probabilities with new actor parameters
             with torch.no_grad():
-                _, log_p, _ = self.modules.actor(states)
+                _, log_p, _ = self.model.actor(states)
             # Optimize a Monte Carlo estimate of the loss function
             # from equation 18 in reference 2:
             # J(\alpha) = E_{a_t \tilde \pi_t} [-\alpha \log \pi_t(a_t | s_t) - \alpha \bar H]
             alpha = self._internals.log_temperature.exp()
             temp_loss = (alpha * (-log_p - self.current.target_entropy)).mean()
 
-            self.modules.entropy_optimizer.zero_grad()
+            self.model.entropy_optimizer.zero_grad()
             temp_loss.backward()
-            self.modules.entropy_optimizer.step()
+            self.model.entropy_optimizer.step()
 
 
     def _choose_action(self, state):
@@ -414,7 +414,7 @@ class SAC(OffPolicyAgent):
         else:
             # Ask the actor to choose the action
             with torch.no_grad():
-                action, _, _ = self.modules.actor(state)
+                action, _, _ = self.model.actor(state)
         return action
 
 
@@ -427,7 +427,7 @@ class SAC(OffPolicyAgent):
             'hp': self.hp,
             'current': self.current,
             'status': self.status,
-            'model_state_dict': self.modules.state_dict(),
+            'model_state_dict': self.model.state_dict(),
         }, filename)
 
     def _load_checkpoint_first_pass(self, checkpoint):
@@ -441,7 +441,7 @@ class SAC(OffPolicyAgent):
         self.hp = data['hp']
         self.current = data['current']
         self.status = data['status']
-        self.modules.load_state_dict(data['model_state_dict'])
+        self.model.load_state_dict(data['model_state_dict'])
 
     def on_episode_end(self):
         """
