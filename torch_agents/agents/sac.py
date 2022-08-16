@@ -393,28 +393,17 @@ class SAC(OffPolicyAgent):
             self.model.entropy_optimizer.step()
 
 
-    def _choose_action(self, state):
-        """
-        Choose an action from the given state, called automatically by train()
-
-        * state: a tensor of shape env.observation_space.shape
-
-        return value: action
-
-        * action: a numpy array or a tensor of shape env.action_space.shape
-        """
-        if self.status.action_count < self.current.warmup_actions:
-            # Sample random numbers in uniform(0, 1) with shape to match the action_space
-            d = np.array(self._internals.action_space.shape).prod()
-            r = np.random.rand(d)
-            # Rescale and offset 
-            scale = self._internals.action_space.high - self._internals.action_space.low
-            action = r * scale + self._internals.action_space.low
-            self.status.entropy = np.log(scale).sum()
+    def _random_action(self, state):
+        if self.status.use_discrete_actions:
+            raise NotImplementedError
         else:
-            # Ask the actor to choose the action
-            with torch.no_grad():
-                action, _, _ = self.model.actor(state)
+            scale = self._internals.action_space.high - self._internals.action_space.low
+            self.status.entropy = np.log(scale).sum()
+            return super()._random_action(state)
+
+    def _predict_action(self, state):
+        with torch.no_grad():
+            action, _, _ = self.model.actor(state)
         return action
 
 

@@ -238,6 +238,36 @@ class OffPolicyAgent(Agent):
         for param, target_param in zip(live.parameters(), target.parameters()):
             target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
 
+    def _choose_action(self, state):
+        """
+        Choose an action from the given state, called automatically by train()
+
+        * state: a tensor of shape env.observation_space.shape
+
+        return value: action
+
+        * action: a numpy array or a tensor of shape env.action_space.shape
+        """
+        if self.status.action_count < self.current.warmup_actions:
+            return self._random_action(state)
+        else:
+            return self._predict_action(state)
+
+    def _random_action(self, state):
+        if self.status.use_discrete_actions:
+            raise NotImplementedError
+        else:
+            # Sample random numbers in uniform(0, 1) with shape to match the action_space
+            d = np.array(self._internals.action_space.shape).prod()
+            r = np.random.rand(d)
+            # Rescale and offset 
+            scale = self._internals.action_space.high - self._internals.action_space.low
+            action = r * scale + self._internals.action_space.low
+            return action
+
+    def _predict_action(self, state):
+        raise NotImplementedError
+
     # Training loop for off-policy agents
     def train(self):
 
